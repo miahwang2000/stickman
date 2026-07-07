@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Stickman Class Final</title>
+
+<!-- GIF 인코딩 라이브러리 (내부적으로 Web Worker를 사용해 화면 멈춤 없이 백그라운드에서 인코딩함) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+
+<style>
+html, body { margin:0; height:100%; }
+body {
+  font-family:sans-serif;
+  background:#f2f2f2;
+  display:flex;
+  justify-content:center;
+}
+
+/* 전체 앱을 폭 600 x 높이 1024 기준으로 최적화 (그 이하 화면에서는 자동 축소) */
+#appWrap {
+  width:100%;
+  max-width:600px;
+  max-height:1024px;
+  margin:0 auto;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+}
+
+.topbar, .bottombar {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  padding:10px;
+  background:#ddd;
+  align-items:center;
+}
+
+#canvasWrap {
+  position:relative;
+  width:100%;
+  max-width:500px;
+  aspect-ratio: 1 / 1;
+  margin:12px auto;
+  background:white;
+  border:1px solid #ccc;
+  touch-action:none; /* 손가락으로 그릴 때 화면 스크롤/줌 되는 것 방지 */
+}
+
+/* 가이드 캔버스(아래) / 드로잉 캔버스(위, 투명) */
+#canvasWrap canvas {
+  display:block;
+  position:absolute;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+}
+
+#guide { pointer-events:none; }
+#c { background:transparent; }
+
+button {
+  padding:10px 14px;
+  font-size:18px;
+  min-width:44px;
+  min-height:44px;
+  border-radius:8px;
+  border:1px solid #bbb;
+  background:#fff;
+  touch-action:manipulation; /* 모바일에서 더블탭 확대/딜레이 방지 */
+}
+
+.frames {
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+  margin-left:auto;
+}
+
+.stageLabel {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-weight:bold;
+  font-size:16px;
+  color:#333;
+  padding:10px 14px;
+  min-height:44px;
+  box-sizing:border-box;
+  background:#fff;
+  border-radius:6px;
+}
+
+.stageBackBtn {
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:44px;
+  height:44px;
+  font-size:18px;
+  line-height:1;
+  background:#fff;
+  border-radius:8px;
+  cursor:pointer;
+  user-select:none;
+  touch-action:manipulation;
+}
+
+.stageBackBtn:active {
+  background:#eee;
+}
+
+.stageBackBtn.hidden {
+  visibility:hidden;
+}
+
+/* 토스트 (alert 대신 사용, 화면을 막지 않는 안내) */
+#toast {
+  position:fixed;
+  left:50%;
+  bottom:40px;
+  transform:translateX(-50%) translateY(10px);
+  background:rgba(0,0,0,0.8);
+  color:#fff;
+  padding:10px 18px;
+  border-radius:20px;
+  font-size:14px;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity 0.25s ease, transform 0.25s ease;
+  z-index:999;
+  white-space:nowrap;
+}
+
+#toast.show {
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+
+.frameBox {
+  width:36px;
+  height:36px;
+  background:#bbb;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  border-radius:6px;
+  font-size:15px;
+}
+
+.active { background:orange; }
+
+.toolActive { background:#2ecc71; color:white; }
+.playActive { background:#2ecc71; color:white; }
+</style>
+</head>
+
+<body>
+
+<div id="appWrap">
+
+<!-- TOP -->
+<div class="topbar">
+  <button id="brushBtn" onclick="selectTool('pen')">브러시</button>
+  <button id="eraserBtn" onclick="selectTool('eraser')">지우개</button>
+  <button onclick="resetCurrentFrame()" title="다시 그리기">🔄</button>
+  <div id="stageBackBtn" class="stageBackBtn hidden" onclick="prevStage()" title="이전 스테이지로 이동">◀️</div>
+  <div id="stageLabel" class="stageLabel">
+    <span id="stageText">스테이지 1</span>
+  </div>
+</div>
+
+<div id="canvasWrap">
+  <canvas id="guide" width="500" height="500"></canvas>
+  <canvas id="c" width="500" height="500"></canvas>
+</div>
+
+<!-- BOTTOM -->
+<div class="bottombar">
+  <button id="playBtn" onclick="play()" title="PLAY">▶️</button>
+  <button onclick="stop()" title="STOP">⏹️</button>
+  <button onclick="nextStage()" title="다음 스테이지">⏭️</button>
+  <button id="gifBtn" onclick="downloadGif()" title="GIF 다운로드">⬇️</button>
+
+  <div class="frames" id="frameUI"></div>
+</div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* =========================
+   스테이지별 가이드 이미지 (파일 경로)
+   - stage1Guides: 걷기(walk) 동작 7장
+   - stage2Guides: 달리기(running) 동작 7장
+   - 3~5 스테이지 이미지는 아직 없어서 빈 배열([])로 둠.
+     빈 배열이면 그냥 가이드가 안 보일 뿐, 에러는 나지 않음.
+
+   ※ 이미지는 GitHub Pages로 배포된 주소를 사용합니다.
+     (https://miahwang2000.github.io/stickman/images/ 폴더 아래에 실제 파일이 있음)
+========================= */
+const stage1Guides = [
+  "https://miahwang2000.github.io/stickman/images/walk1.png",
+  "https://miahwang2000.github.io/stickman/images/walk2.png",
+  "https://miahwang2000.github.io/stickman/images/walk3.png",
+  "https://miahwang2000.github.io/stickman/images/walk4.png",
+  "https://miahwang2000.github.io/stickman/images/walk5.png",
+  "https://miahwang2000.github.io/stickman/images/walk6.png",
+  "https://miahwang2000.github.io/stickman/images/walk7.png"
+];
+
+const stage2Guides = [
+  "https://miahwang2000.github.io/stickman/images/running1.png",
+  "https://miahwang2000.github.io/stickman/images/running2.png",
+  "https://miahwang2000.github.io/stickman/images/running3.png",
+  "https://miahwang2000.github.io/stickman/images/running4.png",
+  "https://miahwang2000.github.io/stickman/images/running5.png",
+  "https://miahwang2000.github.io/stickman/images/running6.png",
+  "https://miahwang2000.github.io/stickman/images/running7.png"
+];
+
+const guideSets = [
+  stage1Guides, // 스테이지 1 - 걷기(walk)
+  stage2Guides, // 스테이지 2 - 달리기(running)
+  [],           // 스테이지 3
+  [],           // 스테이지 4
+  []            // 스테이지 5
+];
+
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+
+const guideCanvas = document.getElementById("guide");
+const guideCtx = guideCanvas.getContext("2d");
+
+let tool = "pen";
+let drawing = false;
+
+let currentFrame = 0;
+let stage = 1;
+
+let frames = new Array(7).fill(null);
+
+let interval = null;
+let playIndex = 0;
+
+/* =========================
+   TOOL (브러시/지우개 활성 표시)
+========================= */
+function selectTool(t){
+  tool = t;
+
+  const brushBtn = document.getElementById("brushBtn");
+  const eraserBtn = document.getElementById("eraserBtn");
+
+  brushBtn.classList.toggle("toolActive", tool === "pen");
+  eraserBtn.classList.toggle("toolActive", tool === "eraser");
+}
+selectTool("pen"); // 초기값: 브러시 선택 상태로 시작
+
+/* =========================
+   UI
+========================= */
+function renderUI(){
+  const ui = document.getElementById("frameUI");
+  ui.innerHTML = "";
+
+  for(let i=0;i<7;i++){
+    let d = document.createElement("div");
+    d.className = "frameBox";
+    d.innerText = i+1;
+
+    if(i === currentFrame) d.classList.add("active");
+
+    d.onclick = () => {
+      if(interval) return; // 재생 중에는 프레임 이동 막기
+      saveFrame();
+      currentFrame = i;
+      loadFrame(i);
+    };
+
+    ui.appendChild(d);
+  }
+}
+renderUI();
+
+/* =========================
+   DRAW
+   (캔버스가 CSS로 화면 크기에 맞게 늘어나거나 줄어들 수 있으므로,
+    실제 내부 해상도(500x500)에 맞게 좌표를 보정해준다 - 모바일 대응)
+========================= */
+function getCanvasPos(clientX, clientY){
+  const r = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / r.width;
+  const scaleY = canvas.height / r.height;
+  return {
+    x: (clientX - r.left) * scaleX,
+    y: (clientY - r.top) * scaleY
+  };
+}
+
+function startDraw(clientX, clientY){
+  if(interval) return;
+  drawing = true;
+  const p = getCanvasPos(clientX, clientY);
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+}
+
+function moveDraw(clientX, clientY){
+  if(!drawing) return;
+  const p = getCanvasPos(clientX, clientY);
+
+  if(tool === "eraser"){
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.lineWidth = 20;
+  } else {
+    ctx.globalCompositeOperation = "source-over";
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "black";
+  }
+
+  ctx.lineCap = "round";
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+}
+
+function endDraw(){
+  drawing = false;
+  saveFrame();
+}
+
+// 마우스 (PC)
+canvas.addEventListener("mousedown", (e)=> startDraw(e.clientX, e.clientY));
+canvas.addEventListener("mouseup", endDraw);
+canvas.addEventListener("mousemove", (e)=> moveDraw(e.clientX, e.clientY));
+
+// 터치 (모바일) - preventDefault로 화면 스크롤/줌 방지
+canvas.addEventListener("touchstart", (e)=>{
+  e.preventDefault();
+  const t = e.touches[0];
+  startDraw(t.clientX, t.clientY);
+}, { passive:false });
+
+canvas.addEventListener("touchmove", (e)=>{
+  e.preventDefault();
+  const t = e.touches[0];
+  moveDraw(t.clientX, t.clientY);
+}, { passive:false });
+
+canvas.addEventListener("touchend", (e)=>{
+  e.preventDefault();
+  endDraw();
+}, { passive:false });
+
+/* =========================
+   FRAME
+   (frames 배열에는 드로잉 캔버스만 저장. 가이드는 별도 캔버스라서
+    사용자가 그린 그림에 가이드가 섞여 저장되지 않음)
+========================= */
+function saveFrame(){
+  frames[currentFrame] = canvas.toDataURL();
+}
+
+function loadFrame(i){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  if(frames[i]){
+    let img = new Image();
+    img.src = frames[i];
+    img.onload = ()=>{
+      ctx.drawImage(img,0,0);
+    };
+  }
+
+  // 재생 중이 아닐 때만 가이드를 보여줌
+  if(!interval){
+    showGuide(i);
+  }
+
+  renderUI();
+}
+
+/* =========================
+   GUIDE (이미지 기반, 30% 투명도)
+   ※ 외부 이미지를 canvas에 그리므로 crossOrigin 속성을 지정해 CORS 문제를 방지합니다.
+   ※ 스테이지 전환 시 alert() 창이 떠 있는 동안에도 이전 프레임의 이미지 로딩이
+     백그라운드에서 계속 진행되다가, 얼럿을 닫은 후 새 프레임 이미지 로딩과
+     겹쳐서 그려지는 문제(가이드 이미지가 2개로 겹쳐 보이는 현상)가 있었습니다.
+     이를 막기 위해 요청마다 고유 ID를 부여하고, 로딩이 끝났을 때 그 ID가
+     "가장 최근 요청"이 맞는지 확인한 뒤에만 그리도록 했습니다(오래된 요청은 무시).
+========================= */
+let guideRequestId = 0;
+
+function showGuide(frameIndex){
+  guideRequestId++;
+  const myRequestId = guideRequestId;
+
+  guideCtx.clearRect(0,0,guideCanvas.width,guideCanvas.height);
+
+  const set = guideSets[stage-1] || [];
+  const src = set[frameIndex];
+
+  if(!src) return; // 해당 스테이지/프레임에 가이드 이미지가 없으면 그냥 안 보이게 처리 (에러 없음)
+
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    // 이 로딩이 시작된 이후에 더 최신 요청(다른 프레임/스테이지 전환 등)이 있었다면 무시
+    if(myRequestId !== guideRequestId) return;
+    // 재생이 시작된 사이에 이미지가 늦게 로드되는 경우를 대비해 다시 한 번 체크
+    if(interval) return;
+
+    guideCtx.clearRect(0,0,guideCanvas.width,guideCanvas.height);
+    guideCtx.save();
+    guideCtx.globalAlpha = 0.3;
+    guideCtx.drawImage(img, 0, 0, guideCanvas.width, guideCanvas.height);
+    guideCtx.restore();
+  };
+  img.onerror = () => {
+    console.warn("가이드 이미지를 불러오지 못했습니다. stage:", stage, "frame:", frameIndex, "src:", src);
+  };
+  img.src = src;
+}
+
+function hideGuide(){
+  guideCtx.clearRect(0,0,guideCanvas.width,guideCanvas.height);
+}
+
+/* =========================
+   PLAY (가이드 완전히 숨김)
+========================= */
+function play(){
+  if(interval) return;
+
+  hideGuide(); // 플레이 시작하는 순간 가이드는 100% 사라짐
+  document.getElementById("playBtn").classList.add("playActive");
+
+  playIndex = 0;
+
+  interval = setInterval(()=>{
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    currentFrame = playIndex; // 재생 중에도 현재 프레임 번호를 실시간으로 맞춰줌
+    renderUI();
+
+    if(frames[playIndex]){
+      let img = new Image();
+      img.src = frames[playIndex];
+      img.onload = ()=>{
+        ctx.drawImage(img,0,0);
+      };
+    }
+
+    playIndex++;
+    if(playIndex > 6) playIndex = 0;
+
+  },180);
+}
+
+function stop(){
+  clearInterval(interval);
+  interval = null;
+
+  document.getElementById("playBtn").classList.remove("playActive");
+
+  // 정지하면 현재 프레임의 가이드를 다시 30%로 보여줌
+  showGuide(currentFrame);
+}
+
+/* =========================
+   GIF 다운로드
+   - 인코딩은 gif.js 라이브러리가 Web Worker(백그라운드 스레드)에서 처리하므로
+     GIF를 만드는 동안에도 화면(메인 스레드)이 멈추지 않음.
+   - 워커 스크립트는 fetch로 받아 Blob URL로 변환해서 넘겨준다.
+     (크로스 오리진 CDN 주소를 워커에 직접 넘기면 브라우저에 따라
+      막히는 경우가 있어, 이렇게 하면 항상 안전하게 동작함)
+========================= */
+let _gifWorkerBlobUrl = null; // 한 번만 받아서 재사용 (매번 다시 받지 않도록)
+
+async function getGifWorkerUrl(){
+  if(_gifWorkerBlobUrl) return _gifWorkerBlobUrl;
+  const res = await fetch("https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js");
+  const blob = await res.blob();
+  _gifWorkerBlobUrl = URL.createObjectURL(blob);
+  return _gifWorkerBlobUrl;
+}
+
+function frameToCanvas(dataUrl){
+  // 프레임(투명 배경) 위에 흰 배경을 깔아 GIF용 캔버스로 변환
+  return new Promise((resolve, reject) => {
+    const tmp = document.createElement("canvas");
+    tmp.width = canvas.width;
+    tmp.height = canvas.height;
+    const tctx = tmp.getContext("2d");
+
+    tctx.fillStyle = "white";
+    tctx.fillRect(0, 0, tmp.width, tmp.height);
+
+    if(!dataUrl){
+      resolve(tmp); // 빈 프레임이면 흰 배경만
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      tctx.drawImage(img, 0, 0);
+      resolve(tmp);
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+async function downloadGif(){
+  if(interval) return; // 재생 중에는 실행 안 함
+
+  const btn = document.getElementById("gifBtn");
+  btn.disabled = true;
+  const originalText = btn.innerText;
+  btn.innerText = "⏳";
+  btn.title = "GIF 생성 중...";
+
+  try{
+    saveFrame(); // 현재 그리고 있던 프레임도 저장
+
+    const workerUrl = await getGifWorkerUrl();
+
+    const gif = new GIF({
+      workers: 2,
+      quality: 10,
+      width: canvas.width,
+      height: canvas.height,
+      workerScript: workerUrl
+    });
+
+    for(let i = 0; i < 7; i++){
+      const frameCanvas = await frameToCanvas(frames[i]);
+      gif.addFrame(frameCanvas, { delay: 180 });
+    }
+
+    gif.on("finished", (blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "stickman_stage" + stage + ".gif";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      btn.disabled = false;
+      btn.innerText = originalText;
+      btn.title = "GIF 다운로드";
+    });
+
+    gif.render();
+
+  } catch(err){
+    console.error("GIF 생성 중 오류:", err);
+    alert("GIF를 만드는 중 문제가 발생했습니다: " + (err && err.message ? err.message : err));
+    btn.disabled = false;
+    btn.innerText = originalText;
+    btn.title = "GIF 다운로드";
+  }
+}
+
+/* =========================
+   TOAST
+   (alert()은 화면을 막는 모달이라 모바일에서 불편하고,
+    떠 있는 동안 이전 요청의 이미지 로딩과 겹치는 문제의 원인이 될 수 있어
+    화면을 막지 않는 토스트 알림으로 교체함)
+========================= */
+let toastTimer = null;
+function showToast(msg){
+  const el = document.getElementById("toast");
+  el.innerText = msg;
+  el.classList.add("show");
+
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{
+    el.classList.remove("show");
+  }, 1000);
+}
+
+/* =========================
+   STAGE
+========================= */
+function goToStage(newStage){
+  stage = newStage;
+
+  stop(); // 혹시 재생 중이면 정지
+
+  document.getElementById("stageText").innerText = "스테이지 " + stage;
+
+  // 1번 스테이지에서는 이전 스테이지 아이콘을 숨김
+  document.getElementById("stageBackBtn").classList.toggle("hidden", stage <= 1);
+
+  showToast("스테이지 " + stage + " 시작!");
+
+  frames = new Array(7).fill(null);
+  currentFrame = 0;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  loadFrame(0); // 새 스테이지의 0번 프레임 + 가이드 표시
+}
+
+function nextStage() {
+  let n = stage + 1;
+  if(n > 5) n = 1; // 5스테이지까지만 존재
+  goToStage(n);
+}
+
+function prevStage() {
+  if(stage <= 1) return; // 1번 스테이지에서는 더 이전으로 가지 않음
+  goToStage(stage - 1);
+}
+
+/* =========================
+   다시 그리기 (현재 프레임의 사용자 그림만 초기화, 가이드는 유지)
+========================= */
+function resetCurrentFrame(){
+  if(interval) return; // 재생 중에는 동작 안 함
+
+  frames[currentFrame] = null;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  showGuide(currentFrame); // 가이드는 다시 보여줌
+}
+
+loadFrame(0);
+
+</script>
+</body>
+</html>
