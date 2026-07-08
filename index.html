@@ -72,6 +72,23 @@ button {
   touch-action:manipulation; /* 모바일에서 더블탭 확대/딜레이 방지 */
 }
 
+/* 브러시/지우개 버튼: 텍스트 대신 이모지를 쓰면서 상단바 폭을 줄이기 위한 전용 스타일.
+   - 좌우 padding을 줄여 버튼 자체 폭은 줄이되, 터치 영역(44x44)은 그대로 유지.
+   - 일부 모바일 브라우저/폰트에서 이모지가 작고 흐리게 렌더링되는 문제를 막기 위해
+     font-size를 키우고, 이모지 전용 컬러 폰트를 우선 사용하도록 font-family를 지정.
+   - line-height:1 + display:flex로 세로 중앙 정렬해서 이모지가 버튼 중앙에 오도록 함. */
+.iconBtn {
+  padding:6px 8px;
+  min-width:44px;
+  min-height:44px;
+  font-size:24px;
+  line-height:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Segoe UI Symbol",sans-serif;
+}
+
 .frames {
   display:flex;
   flex-wrap:wrap;
@@ -165,8 +182,8 @@ button {
 
 <!-- TOP -->
 <div class="topbar">
-  <button id="brushBtn" onclick="selectTool('pen')">브러시</button>
-  <button id="eraserBtn" onclick="selectTool('eraser')">지우개</button>
+  <button id="brushBtn" class="iconBtn" onclick="selectTool('pen')" title="브러시">🖌️</button>
+  <button id="eraserBtn" class="iconBtn" onclick="selectTool('eraser')" title="지우개">🧽</button>
   <button onclick="resetCurrentFrame()" title="다시 그리기">🔄</button>
   <div id="stageBackBtn" class="stageBackBtn hidden" onclick="prevStage()" title="이전 스테이지로 이동">◀️</div>
   <div id="stageLabel" class="stageLabel">
@@ -234,12 +251,24 @@ const stage3Guides = [
   "https://miahwang2000.github.io/stickman/images/jumping7.png"
 ];
 
+const stage4Guides = [
+  "https://miahwang2000.github.io/stickman/images/soccer1.png",
+  "https://miahwang2000.github.io/stickman/images/soccer2.png",
+  "https://miahwang2000.github.io/stickman/images/soccer3.png",
+  "https://miahwang2000.github.io/stickman/images/soccer4.png",
+  "https://miahwang2000.github.io/stickman/images/soccer5.png",
+  "https://miahwang2000.github.io/stickman/images/soccer6.png",
+  "https://miahwang2000.github.io/stickman/images/soccer7.png"
+];
+
 const guideSets = [
   stage1Guides, // 스테이지 1 - 걷기(walk)
   stage2Guides, // 스테이지 2 - 달리기(running)
   stage3Guides, // 스테이지 3 - 점프(jumping)
-  [],           // 스테이지 4
-  []            // 스테이지 5
+  stage4Guides, // 스테이지 4 - 축구(soccer)
+  [],           // 스테이지 5 (가이드 이미지 없음)
+  [],           // 스테이지 6 (가이드 이미지 없음)
+  []            // 스테이지 7 (가이드 이미지 없음)
 ];
 
 const canvas = document.getElementById("c");
@@ -501,12 +530,18 @@ async function getGifWorkerUrl(){
   return _gifWorkerBlobUrl;
 }
 
+// GIF로 저장할 때의 출력 크기. 원본 캔버스(500x500)보다 작게(200x200) 저장해서
+// 파일 용량을 줄이고 다운로드/공유를 가볍게 만든다.
+const GIF_OUTPUT_WIDTH = 200;
+const GIF_OUTPUT_HEIGHT = 200;
+
 function frameToCanvas(dataUrl){
-  // 프레임(투명 배경) 위에 흰 배경을 깔아 GIF용 캔버스로 변환
+  // 프레임(투명 배경) 위에 흰 배경을 깔고, GIF_OUTPUT_WIDTH x GIF_OUTPUT_HEIGHT 크기로 축소해서
+  // GIF용 캔버스로 변환
   return new Promise((resolve, reject) => {
     const tmp = document.createElement("canvas");
-    tmp.width = canvas.width;
-    tmp.height = canvas.height;
+    tmp.width = GIF_OUTPUT_WIDTH;
+    tmp.height = GIF_OUTPUT_HEIGHT;
     const tctx = tmp.getContext("2d");
 
     tctx.fillStyle = "white";
@@ -519,7 +554,8 @@ function frameToCanvas(dataUrl){
 
     const img = new Image();
     img.onload = () => {
-      tctx.drawImage(img, 0, 0);
+      // 원본(500x500) 이미지를 축소된 캔버스 크기에 맞춰 그림
+      tctx.drawImage(img, 0, 0, tmp.width, tmp.height);
       resolve(tmp);
     };
     img.onerror = reject;
@@ -544,8 +580,8 @@ async function downloadGif(){
     const gif = new GIF({
       workers: 2,
       quality: 10,
-      width: canvas.width,
-      height: canvas.height,
+      width: GIF_OUTPUT_WIDTH,
+      height: GIF_OUTPUT_HEIGHT,
       workerScript: workerUrl
     });
 
@@ -623,7 +659,7 @@ function goToStage(newStage){
 
 function nextStage() {
   let n = stage + 1;
-  if(n > 5) n = 1; // 5스테이지까지만 존재
+  if(n > 7) n = 1; // 7스테이지까지만 존재
   goToStage(n);
 }
 
