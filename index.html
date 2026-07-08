@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Stickman Class Final</title>
 
-<!-- GIF 인코딩 라이브러리 (내부적으로 Web Worker를 사용해 화면 멈춤 없이 백그라운드에서 인코딩) -->
+<!-- GIF 인코딩 라이브러리 (내부적으로 Web Worker를 사용해 화면 멈춤 없이 백그라운드에서 인코딩함) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
 
 <style>
@@ -224,10 +224,20 @@ const stage2Guides = [
   "https://miahwang2000.github.io/stickman/images/running7.png"
 ];
 
+const stage3Guides = [
+  "https://miahwang2000.github.io/stickman/images/jumping1.png",
+  "https://miahwang2000.github.io/stickman/images/jumping2.png",
+  "https://miahwang2000.github.io/stickman/images/jumping3.png",
+  "https://miahwang2000.github.io/stickman/images/jumping4.png",
+  "https://miahwang2000.github.io/stickman/images/jumping5.png",
+  "https://miahwang2000.github.io/stickman/images/jumping6.png",
+  "https://miahwang2000.github.io/stickman/images/jumping7.png"
+];
+
 const guideSets = [
   stage1Guides, // 스테이지 1 - 걷기(walk)
   stage2Guides, // 스테이지 2 - 달리기(running)
-  [],           // 스테이지 3
+  stage3Guides, // 스테이지 3 - 점프(jumping)
   [],           // 스테이지 4
   []            // 스테이지 5
 ];
