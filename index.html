@@ -280,13 +280,60 @@ const guideCtx = guideCanvas.getContext("2d");
 let tool = "pen";
 let drawing = false;
 
+/* =========================
+   자동 저장 (localStorage)
+   - 스테이지별로 7개 프레임(dataURL)을 모두 저장해서,
+     스테이지를 이동하거나 브라우저를 껐다 켜도 그림이 유지되도록 함.
+   ※ 참고: Claude.ai 내부 미리보기(아티팩트) 화면에서는 localStorage가
+     동작하지 않을 수 있습니다. 이 파일을 다운로드해서 직접 열거나
+     GitHub Pages 등 실제 웹 서버에 올려서 사용하면 정상적으로
+     자동저장/불러오기가 동작합니다.
+========================= */
+const STORAGE_KEY = "stickmanClassFinal_autoSave_v1";
+
+let allStageFrames = {};
+for(let s=1; s<=7; s++){
+  allStageFrames[s] = new Array(7).fill(null);
+}
+
 let currentFrame = 0;
 let stage = 1;
-
-let frames = new Array(7).fill(null);
+let frames = allStageFrames[stage];
 
 let interval = null;
 let playIndex = 0;
+
+function saveToLocalStorage(){
+  try{
+    const data = {
+      stage: stage,
+      currentFrame: currentFrame,
+      framesByStage: allStageFrames
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch(e){
+    console.warn("자동저장에 실패했습니다:", e);
+  }
+}
+
+function loadFromLocalStorage(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  } catch(e){
+    console.warn("저장된 데이터를 불러오는 중 오류가 발생했습니다:", e);
+    return null;
+  }
+}
+
+function clearLocalStorage(){
+  try{
+    localStorage.removeItem(STORAGE_KEY);
+  } catch(e){
+    console.warn("저장된 데이터를 삭제하지 못했습니다:", e);
+  }
+}
 
 /* =========================
    TOOL (브러시/지우개 활성 표시)
@@ -321,6 +368,7 @@ function renderUI(){
       saveFrame();
       currentFrame = i;
       loadFrame(i);
+      saveToLocalStorage();
     };
 
     ui.appendChild(d);
@@ -404,6 +452,7 @@ canvas.addEventListener("touchend", (e)=>{
 ========================= */
 function saveFrame(){
   frames[currentFrame] = canvas.toDataURL();
+  saveToLocalStorage();
 }
 
 function loadFrame(i){
@@ -510,6 +559,7 @@ function stop(){
 
   // 정지하면 현재 프레임의 가이드를 다시 30%로 보여줌
   showGuide(currentFrame);
+  saveToLocalStorage();
 }
 
 /* =========================
@@ -649,12 +699,14 @@ function goToStage(newStage){
 
   showToast("스테이지 " + stage + " 시작!");
 
-  frames = new Array(7).fill(null);
+  frames = allStageFrames[stage]; // 저장되어 있던 스테이지별 프레임을 불러옴 (없으면 빈 배열)
   currentFrame = 0;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   loadFrame(0); // 새 스테이지의 0번 프레임 + 가이드 표시
+
+  saveToLocalStorage();
 }
 
 function nextStage() {
@@ -677,9 +729,36 @@ function resetCurrentFrame(){
   frames[currentFrame] = null;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   showGuide(currentFrame); // 가이드는 다시 보여줌
+  saveToLocalStorage();
 }
 
-loadFrame(0);
+/* =========================
+   초기화: 저장된 데이터가 있으면 복원
+========================= */
+(function initFromStorage(){
+  const saved = loadFromLocalStorage();
+
+  if(saved && saved.framesByStage){
+    for(let s=1; s<=7; s++){
+      if(saved.framesByStage[s]){
+        allStageFrames[s] = saved.framesByStage[s];
+      }
+    }
+    stage = saved.stage || 1;
+    currentFrame = saved.currentFrame || 0;
+  }
+
+  frames = allStageFrames[stage];
+
+  document.getElementById("stageText").innerText = "스테이지 " + stage;
+  document.getElementById("stageBackBtn").classList.toggle("hidden", stage <= 1);
+
+  loadFrame(currentFrame);
+
+  if(saved){
+    showToast("이전에 저장된 그림을 불러왔습니다");
+  }
+})();
 
 </script>
 </body>
