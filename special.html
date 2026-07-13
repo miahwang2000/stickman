@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>스페셜 스테이지 - Stickman Class</title>
+
+<!-- GIF 인코딩 라이브러리 (내부적으로 Web Worker를 사용해 화면 멈춤 없이 백그라운드에서 인코딩함) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+
+<style>
+html, body { margin:0; height:100%; }
+body {
+  font-family:sans-serif;
+  background:#f2f2f2;
+  display:flex;
+  justify-content:center;
+}
+
+#appWrap {
+  width:100%;
+  max-width:600px;
+  margin:0 auto;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+}
+
+.topbar, .bottombar {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  padding:10px;
+  background:#ddd;
+  align-items:center;
+}
+
+.homeBtn {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:44px;
+  height:44px;
+  font-size:20px;
+  line-height:1;
+  background:#fff;
+  border-radius:8px;
+  text-decoration:none;
+  color:#333;
+  touch-action:manipulation;
+}
+.homeBtn:active { background:#eee; }
+
+.stageLabel {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-weight:bold;
+  font-size:16px;
+  color:#333;
+  padding:10px 14px;
+  min-height:44px;
+  box-sizing:border-box;
+  background:#fff;
+  border-radius:6px;
+}
+
+.levelTag {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:bold;
+  color:#fff;
+  background:#9b59b6;
+}
+
+button {
+  padding:10px 14px;
+  font-size:18px;
+  min-width:44px;
+  min-height:44px;
+  border-radius:8px;
+  border:1px solid #bbb;
+  background:#fff;
+  touch-action:manipulation;
+}
+
+#canvasWrap {
+  position:relative;
+  width:100%;
+  max-width:500px;
+  aspect-ratio: 1 / 1;
+  margin:12px auto;
+  background:white;
+  border:1px solid #ccc;
+}
+
+#canvasWrap canvas {
+  display:block;
+  width:100%;
+  height:100%;
+}
+
+.playActive { background:#2ecc71; color:white; }
+
+.helpText {
+  font-size:13px;
+  color:#666;
+  padding:0 14px 6px 14px;
+  line-height:1.5;
+}
+
+/* 업로드 슬롯
+   - 7칸이 화면 폭에 맞춰 한 줄에 고르게 들어가도록 grid로 배치 (기기별로 자동 축소)
+   - 터치 영역은 작아 보여도 최소 36px 이상은 유지해서 누르기 어렵지 않게 함 */
+.uploadGrid {
+  display:grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap:5px;
+  padding:4px 10px 14px 10px;
+}
+
+.uploadSlot {
+  position:relative;
+  width:100%;
+  aspect-ratio:1 / 1;
+  min-width:0;
+}
+
+.uploadLabel {
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  height:100%;
+  border:1.5px dashed #bbb;
+  border-radius:8px;
+  background:#fff;
+  cursor:pointer;
+  overflow:hidden;
+  position:relative;
+}
+
+.thumb {
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  background:#fff;
+}
+
+.plusIcon {
+  font-size:16px;
+  color:#bbb;
+  line-height:1;
+}
+
+.slotNum {
+  position:absolute;
+  bottom:1px;
+  right:2px;
+  font-size:8px;
+  color:#999;
+  background:rgba(255,255,255,0.8);
+  padding:0 2px;
+  border-radius:3px;
+  pointer-events:none;
+}
+
+.removeBtn {
+  position:absolute;
+  top:-5px;
+  right:-5px;
+  width:15px;
+  height:15px;
+  background:#e74c3c;
+  color:#fff;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:9px;
+  cursor:pointer;
+}
+
+/* 토스트 */
+#toast {
+  position:fixed;
+  left:50%;
+  bottom:40px;
+  transform:translateX(-50%) translateY(10px);
+  background:rgba(0,0,0,0.8);
+  color:#fff;
+  padding:10px 18px;
+  border-radius:20px;
+  font-size:14px;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity 0.25s ease, transform 0.25s ease;
+  z-index:999;
+  white-space:nowrap;
+}
+
+#toast.show {
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+
+/* 사진 찍기 / 사진 추가 선택 바텀시트 */
+.actionSheetOverlay {
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0);
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  pointer-events:none;
+  transition:background 0.2s ease;
+  z-index:1000;
+}
+
+.actionSheetOverlay.show {
+  background:rgba(0,0,0,0.4);
+  pointer-events:auto;
+}
+
+.actionSheet {
+  width:100%;
+  max-width:600px;
+  box-sizing:border-box;
+  background:#fff;
+  border-radius:16px 16px 0 0;
+  padding:8px 12px calc(12px + env(safe-area-inset-bottom, 12px)) 12px;
+  transform:translateY(100%);
+  transition:transform 0.25s ease;
+}
+
+.actionSheetOverlay.show .actionSheet {
+  transform:translateY(0);
+}
+
+.actionSheetBtn {
+  display:block;
+  width:100%;
+  text-align:center;
+  padding:16px 12px;
+  font-size:16px;
+  background:#fff;
+  border:none;
+  border-bottom:1px solid #eee;
+  min-height:44px;
+  box-sizing:border-box;
+}
+
+.actionSheetBtn:last-of-type {
+  border-bottom:none;
+}
+
+.actionSheetCancel {
+  display:block;
+  width:100%;
+  margin-top:8px;
+  padding:16px 12px;
+  font-size:16px;
+  font-weight:bold;
+  background:#f2f2f2;
+  border-radius:10px;
+  border:none;
+  min-height:44px;
+  box-sizing:border-box;
+}
+</style>
+</head>
+
+<body>
+
+<div id="appWrap">
+
+<!-- TOP -->
+<div class="topbar">
+  <a class="homeBtn" href="index.html" title="메인 페이지로">🏠</a>
+  <div class="stageLabel">
+    <span class="levelTag">SPECIAL</span>
+    <span>내 그림으로 애니메이션 만들기</span>
+  </div>
+</div>
+
+<div class="helpText">
+  내가 그린 그림 사진을 7장까지 올려서 순서대로 이어붙이면, 나만의 애니메이션이 완성돼요.
+  그림판이나 종이에 그려서 사진을 찍은 뒤 아래 칸에 순서대로 올려보세요.
+</div>
+
+<div id="canvasWrap">
+  <canvas id="previewCanvas" width="500" height="500"></canvas>
+</div>
+
+<div class="uploadGrid" id="uploadGrid"></div>
+
+<!-- 실제 파일 선택은 이 2개의 숨겨진 input이 담당. 슬롯을 누르면 액션시트가 뜨고,
+     "사진 찍기"/"사진 추가"를 고르면 그에 맞는 input이 대신 열림 -->
+<input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+<input type="file" id="galleryInput" accept="image/*" style="display:none">
+
+<!-- BOTTOM -->
+<div class="bottombar">
+  <button id="playBtn" onclick="play()" title="PLAY">▶️</button>
+  <button onclick="stop()" title="STOP">⏹️</button>
+  <button id="gifBtn" onclick="downloadGif()" title="GIF 다운로드">⬇️</button>
+  <button onclick="resetAll()" title="모두 지우기">🗑️</button>
+</div>
+
+</div>
+
+<div id="toast"></div>
+
+<div class="actionSheetOverlay" id="actionSheetOverlay" onclick="if(event.target===this) closeActionSheet()">
+  <div class="actionSheet">
+    <button type="button" class="actionSheetBtn" onclick="chooseCamera()">📷 사진 찍기</button>
+    <button type="button" class="actionSheetBtn" onclick="chooseGallery()">🖼️ 사진 추가</button>
+    <button type="button" class="actionSheetCancel" onclick="closeActionSheet()">취소</button>
+  </div>
+</div>
+
+<script>
+const FRAME_COUNT = 7;
+const STORAGE_KEY = "stickmanClass_special_v1";
+
+let frames = new Array(FRAME_COUNT).fill(null); // 업로드한 이미지의 dataURL 저장
+let currentIndex = 0;
+let interval = null;
+
+const canvas = document.getElementById("previewCanvas");
+const ctx = canvas.getContext("2d");
+
+/* =========================
+   자동 저장 (localStorage)
+   ※ 참고: Claude.ai 내부 미리보기(아티팩트) 화면에서는 localStorage가
+     동작하지 않을 수 있습니다. 파일을 다운로드해서 직접 열거나
+     GitHub Pages 등 실제 웹 서버에 올려서 사용하면 정상 동작합니다.
+========================= */
+function saveToLocalStorage(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ frames: frames }));
+  } catch(e){
+    console.warn("자동저장에 실패했습니다:", e);
+  }
+}
+
+function loadFromLocalStorage(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  } catch(e){
+    console.warn("저장된 데이터를 불러오는 중 오류가 발생했습니다:", e);
+    return null;
+  }
+}
+
+/* =========================
+   TOAST
+========================= */
+let toastTimer = null;
+function showToast(msg){
+  const el = document.getElementById("toast");
+  el.innerText = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ el.classList.remove("show"); }, 1200);
+}
+
+/* =========================
+   미리보기 캔버스에 이미지를 "contain" 방식으로 그리기
+   (업로드한 사진은 정사각형이 아닐 수 있으므로 흰 배경 위에 비율을 유지한 채 그림)
+========================= */
+function drawFrameOnCanvas(dataUrl, targetCtx, w, h){
+  return new Promise((resolve)=>{
+    targetCtx.fillStyle = "white";
+    targetCtx.fillRect(0, 0, w, h);
+
+    if(!dataUrl){ resolve(); return; }
+
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(w / img.width, h / img.height);
+      const dw = img.width * scale;
+      const dh = img.height * scale;
+      const dx = (w - dw) / 2;
+      const dy = (h - dh) / 2;
+      targetCtx.drawImage(img, dx, dy, dw, dh);
+      resolve();
+    };
+    img.onerror = () => resolve();
+    img.src = dataUrl;
+  });
+}
+
+/* =========================
+   업로드 슬롯 UI 생성 / 갱신
+========================= */
+function buildSlotsUI(){
+  const grid = document.getElementById("uploadGrid");
+  grid.innerHTML = "";
+
+  for(let i=0; i<FRAME_COUNT; i++){
+    const slot = document.createElement("div");
+    slot.className = "uploadSlot";
+
+    const label = document.createElement("div");
+    label.className = "uploadLabel";
+    label.onclick = () => openActionSheet(i);
+
+    const thumb = document.createElement("img");
+    thumb.className = "thumb";
+    thumb.id = "thumb" + i;
+    thumb.style.display = "none";
+
+    const plus = document.createElement("span");
+    plus.className = "plusIcon";
+    plus.id = "plus" + i;
+    plus.innerText = "+";
+
+    const num = document.createElement("span");
+    num.className = "slotNum";
+    num.innerText = (i + 1);
+
+    label.appendChild(thumb);
+    label.appendChild(plus);
+    label.appendChild(num);
+
+    const removeBtn = document.createElement("div");
+    removeBtn.className = "removeBtn";
+    removeBtn.id = "remove" + i;
+    removeBtn.innerText = "✕";
+    removeBtn.style.display = "none";
+    removeBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      removeFrame(i);
+    };
+
+    slot.appendChild(label);
+    slot.appendChild(removeBtn);
+    grid.appendChild(slot);
+  }
+}
+
+function renderSlots(){
+  for(let i=0; i<FRAME_COUNT; i++){
+    const thumb = document.getElementById("thumb" + i);
+    const plus = document.getElementById("plus" + i);
+    const removeBtn = document.getElementById("remove" + i);
+
+    if(frames[i]){
+      thumb.src = frames[i];
+      thumb.style.display = "block";
+      plus.style.display = "none";
+      removeBtn.style.display = "flex";
+    } else {
+      thumb.removeAttribute("src");
+      thumb.style.display = "none";
+      plus.style.display = "flex";
+      removeBtn.style.display = "none";
+    }
+  }
+}
+
+let pendingSlotIndex = null; // 어떤 슬롯을 업로드하려는 중인지 기억
+
+function openActionSheet(i){
+  pendingSlotIndex = i;
+  document.getElementById("actionSheetOverlay").classList.add("show");
+}
+
+function closeActionSheet(){
+  document.getElementById("actionSheetOverlay").classList.remove("show");
+  pendingSlotIndex = null;
+}
+
+function chooseCamera(){
+  document.getElementById("cameraInput").click();
+  closeActionSheet();
+}
+
+function chooseGallery(){
+  document.getElementById("galleryInput").click();
+  closeActionSheet();
+}
+
+// 카메라로 촬영 (모바일에서 capture 속성 덕분에 바로 카메라 앱이 열림)
+document.getElementById("cameraInput").addEventListener("change", (e) => {
+  if(pendingSlotIndex !== null) handleFileSelect(pendingSlotIndex, e.target.files[0]);
+  e.target.value = ""; // 같은 사진을 다시 찍어도 change 이벤트가 발생하도록 초기화
+});
+
+// 사진 보관함(갤러리)에서 선택
+document.getElementById("galleryInput").addEventListener("change", (e) => {
+  if(pendingSlotIndex !== null) handleFileSelect(pendingSlotIndex, e.target.files[0]);
+  e.target.value = "";
+});
+
+function handleFileSelect(i, file){
+  if(!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    frames[i] = e.target.result;
+    renderSlots();
+    drawFrameOnCanvas(frames[i], ctx, canvas.width, canvas.height);
+    saveToLocalStorage();
+    showToast((i + 1) + "번 프레임 업로드 완료");
+  };
+  reader.onerror = () => {
+    showToast("이미지를 불러오지 못했습니다");
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeFrame(i){
+  frames[i] = null;
+  renderSlots();
+  saveToLocalStorage();
+
+  const firstIdx = frames.findIndex(f => f);
+  drawFrameOnCanvas(firstIdx >= 0 ? frames[firstIdx] : null, ctx, canvas.width, canvas.height);
+}
+
+/* =========================
+   PLAY / STOP
+========================= */
+function play(){
+  if(interval) return;
+
+  const hasAny = frames.some(f => f);
+  if(!hasAny){
+    showToast("먼저 그림을 업로드해주세요");
+    return;
+  }
+
+  document.getElementById("playBtn").classList.add("playActive");
+  currentIndex = 0;
+
+  interval = setInterval(async () => {
+    await drawFrameOnCanvas(frames[currentIndex], ctx, canvas.width, canvas.height);
+    currentIndex++;
+    if(currentIndex >= FRAME_COUNT) currentIndex = 0;
+  }, 180);
+}
+
+function stop(){
+  clearInterval(interval);
+  interval = null;
+  document.getElementById("playBtn").classList.remove("playActive");
+}
+
+/* =========================
+   전체 초기화
+========================= */
+function resetAll(){
+  if(interval) stop();
+  if(!confirm("업로드한 그림을 모두 지울까요? 이 작업은 되돌릴 수 없습니다.")) return;
+
+  frames = new Array(FRAME_COUNT).fill(null);
+  renderSlots();
+  drawFrameOnCanvas(null, ctx, canvas.width, canvas.height);
+  saveToLocalStorage();
+  showToast("모두 지웠습니다");
+}
+
+/* =========================
+   GIF 다운로드
+========================= */
+let _gifWorkerBlobUrl = null;
+
+async function getGifWorkerUrl(){
+  if(_gifWorkerBlobUrl) return _gifWorkerBlobUrl;
+  const res = await fetch("https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js");
+  const blob = await res.blob();
+  _gifWorkerBlobUrl = URL.createObjectURL(blob);
+  return _gifWorkerBlobUrl;
+}
+
+const GIF_OUTPUT_WIDTH = 200;
+const GIF_OUTPUT_HEIGHT = 200;
+
+// 파일명이 매번 같으면 모바일에서 "저장"할 때 기존 파일을 덮어쓰게 됨.
+// 다운로드마다 고유한 타임스탬프를 붙여서 항상 새 파일(사본)로 저장되도록 함.
+function getTimestampForFilename(){
+  const d = new Date();
+  const pad = (n, len=2) => String(n).padStart(len, "0");
+  return "" + d.getFullYear() +
+    pad(d.getMonth()+1) +
+    pad(d.getDate()) + "_" +
+    pad(d.getHours()) +
+    pad(d.getMinutes()) +
+    pad(d.getSeconds());
+}
+
+async function downloadGif(){
+  if(interval) return;
+
+  const hasAny = frames.some(f => f);
+  if(!hasAny){
+    showToast("먼저 그림을 업로드해주세요");
+    return;
+  }
+
+  const btn = document.getElementById("gifBtn");
+  btn.disabled = true;
+  const originalText = btn.innerText;
+  btn.innerText = "⏳";
+  btn.title = "GIF 생성 중...";
+
+  try{
+    const workerUrl = await getGifWorkerUrl();
+
+    const gif = new GIF({
+      workers: 2,
+      quality: 10,
+      width: GIF_OUTPUT_WIDTH,
+      height: GIF_OUTPUT_HEIGHT,
+      workerScript: workerUrl
+    });
+
+    for(let i=0; i<FRAME_COUNT; i++){
+      const tmp = document.createElement("canvas");
+      tmp.width = GIF_OUTPUT_WIDTH;
+      tmp.height = GIF_OUTPUT_HEIGHT;
+      const tctx = tmp.getContext("2d");
+      await drawFrameOnCanvas(frames[i], tctx, tmp.width, tmp.height);
+      gif.addFrame(tmp, { delay: 180 });
+    }
+
+    gif.on("finished", (blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "stickman_special_" + getTimestampForFilename() + ".gif";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      btn.disabled = false;
+      btn.innerText = originalText;
+      btn.title = "GIF 다운로드";
+    });
+
+    gif.render();
+
+  } catch(err){
+    console.error("GIF 생성 중 오류:", err);
+    alert("GIF를 만드는 중 문제가 발생했습니다: " + (err && err.message ? err.message : err));
+    btn.disabled = false;
+    btn.innerText = originalText;
+    btn.title = "GIF 다운로드";
+  }
+}
+
+/* =========================
+   초기화
+========================= */
+(function init(){
+  buildSlotsUI();
+
+  const saved = loadFromLocalStorage();
+  if(saved && saved.frames){
+    frames = saved.frames;
+  }
+
+  renderSlots();
+
+  const firstIdx = frames.findIndex(f => f);
+  drawFrameOnCanvas(firstIdx >= 0 ? frames[firstIdx] : null, ctx, canvas.width, canvas.height);
+
+  if(saved){
+    showToast("이전에 업로드한 그림을 불러왔습니다");
+  }
+})();
+</script>
+</body>
+</html>
