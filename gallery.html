@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>작품 전시 갤러리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --wall: #f7f5f1;
+    --wall-deep: #efece5;
+    --ink: #201d1a;
+    --ink-soft: #55504a;
+    --line: #ddd7ca;
+    --brass: #9c7c3f;
+    --brass-deep: #7a6031;
+    --gold: #b6902f;
+    --gold-deep: #8a6a1f;
+    --rose: #93443f;
+    --rose-deep: #712f2b;
+    --sage: #4d6b57;
+    --sage-deep: #38503f;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--wall);
+    color:var(--ink);
+    font-family:'Work Sans', sans-serif;
+    min-height:100vh;
+  }
+
+  /* ---------- 업로드 화면 ---------- */
+  #uploadScreen{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:40px 20px;
+  }
+  .brand{
+    text-align:center;
+    margin-bottom:36px;
+  }
+  .brand .eyebrow{
+    font-size:12px;
+    letter-spacing:0.32em;
+    text-transform:uppercase;
+    color:var(--brass-deep);
+    font-weight:600;
+    margin-bottom:10px;
+  }
+  .brand h1{
+    font-family:'Playfair Display', serif;
+    font-weight:600;
+    font-size:clamp(30px, 4.5vw, 46px);
+    margin:0;
+    letter-spacing:0.01em;
+  }
+  .brand p{
+    margin:12px 0 0;
+    color:var(--ink-soft);
+    font-size:15px;
+  }
+
+  .panel{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:36px;
+    width:100%;
+    max-width:560px;
+    box-shadow:0 1px 2px rgba(32,29,26,0.04);
+  }
+
+  .dropzone{
+    border:1.5px dashed var(--line);
+    border-radius:3px;
+    padding:44px 20px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color:var(--brass);
+    background:#fbf9f4;
+  }
+  .dropzone svg{ margin-bottom:14px; opacity:0.55; }
+  .dropzone .main{ font-size:15px; font-weight:500; }
+  .dropzone .sub{ font-size:13px; color:var(--ink-soft); margin-top:6px; }
+  #fileInput{ display:none; }
+
+  #fileList{
+    margin-top:20px;
+    max-height:220px;
+    overflow-y:auto;
+    border-top:1px solid var(--line);
+  }
+  .file-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:9px 2px;
+    border-bottom:1px solid var(--line);
+    font-size:13px;
+  }
+  .file-row .num{
+    font-family:'Playfair Display', serif;
+    font-weight:600;
+    color:var(--brass-deep);
+    width:26px;
+    flex-shrink:0;
+    text-align:right;
+  }
+  .file-row .name{
+    flex:1;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    color:var(--ink-soft);
+  }
+  .file-row .badge{
+    font-size:10px;
+    letter-spacing:0.05em;
+    padding:2px 6px;
+    border-radius:2px;
+    background:var(--wall-deep);
+    color:var(--brass-deep);
+    font-weight:600;
+    flex-shrink:0;
+  }
+
+  .count-line{
+    margin-top:16px;
+    font-size:13px;
+    color:var(--ink-soft);
+    text-align:center;
+  }
+
+  #generateBtn{
+    margin-top:22px;
+    width:100%;
+    padding:14px;
+    background:var(--ink);
+    color:#fff;
+    border:none;
+    border-radius:3px;
+    font-family:'Work Sans', sans-serif;
+    font-size:14px;
+    font-weight:600;
+    letter-spacing:0.04em;
+    cursor:pointer;
+    transition:background .15s ease;
+  }
+  #generateBtn:disabled{
+    background:#c9c3b8;
+    cursor:not-allowed;
+  }
+  #generateBtn:not(:disabled):hover{
+    background:var(--brass-deep);
+  }
+
+  /* ---------- 갤러리 화면 ---------- */
+  #galleryScreen{ display:none; }
+
+  /* ---------- PREVIEW 화면 (모바일 최적화) ---------- */
+  #previewScreen{ display:none; }
+  #previewGrid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, 250px);
+    justify-content:center;
+    gap:34px 26px;
+    padding:30px 24px 70px;
+  }
+  #previewGrid .artwork{ width:250px; }
+  #previewGrid .frame{
+    width:250px;
+    height:250px;
+    cursor:default;
+  }
+  #previewGrid .frame:hover{
+    border-color:var(--line);
+    box-shadow:0 1px 3px rgba(32,29,26,0.06);
+  }
+  #backFromPreviewBtn{
+    background:transparent;
+    border:1px solid var(--ink);
+    color:var(--ink);
+    padding:9px 16px;
+    border-radius:3px;
+    font-size:13px;
+    font-weight:500;
+    cursor:pointer;
+    font-family:'Work Sans', sans-serif;
+    white-space:nowrap;
+  }
+  #backFromPreviewBtn:hover{ background:var(--ink); color:#fff; }
+
+  #exportPreviewBtn{
+    background:var(--brass-deep);
+    border:1px solid var(--brass-deep);
+    color:#fff;
+    padding:9px 16px;
+    border-radius:3px;
+    font-size:13px;
+    font-weight:500;
+    cursor:pointer;
+    font-family:'Work Sans', sans-serif;
+    white-space:nowrap;
+  }
+  #exportPreviewBtn:hover{ background:var(--brass); border-color:var(--brass); }
+  #exportPreviewBtn:disabled{ background:#c9c3b8; border-color:#c9c3b8; cursor:not-allowed; }
+
+  /* 태블릿/모바일: 250px 고정 폭 대신 화면 폭에 맞춰 유동적인 정사각형 그리드로 전환 */
+  @media (max-width: 640px){
+    #previewScreen .gallery-header{
+      padding:14px 16px;
+      gap:10px;
+    }
+    #previewScreen .gallery-header h1{
+      font-size:17px;
+    }
+    #backFromPreviewBtn, #exportPreviewBtn{
+      padding:11px 16px;
+      font-size:13.5px;
+      min-height:44px;
+    }
+    #previewScreen .vote-banner{
+      padding:16px 16px 4px;
+    }
+    #previewScreen .vote-banner .line1{
+      font-size:clamp(15px, 4.6vw, 18px);
+      line-height:1.4;
+    }
+    #previewScreen .vote-banner .line2{
+      font-size:11.5px;
+    }
+    #previewGrid{
+      grid-template-columns:repeat(2, 1fr);
+      gap:14px 10px;
+      padding:16px 14px 56px;
+    }
+    #previewGrid .artwork{ width:100%; }
+    #previewGrid .frame{
+      width:100%;
+      height:auto;
+      aspect-ratio:1 / 1;
+      padding:6px;
+    }
+    #previewGrid .plaque{ margin-top:7px; }
+    #previewGrid .plaque .num{ font-size:13px; }
+    #previewGrid .plaque .vote-count{ font-size:10px; }
+    #previewGrid .plaque .award-label{ font-size:9.5px; }
+    #previewGrid .ribbon{
+      top:9px;
+      right:-32px;
+      width:120px;
+      padding:4px 0;
+      font-size:9px;
+    }
+    #previewScreen .gallery-footer{
+      font-size:10.5px;
+      padding:0 16px 32px;
+    }
+  }
+
+  /* 아주 좁은 화면(구형 소형 폰)에서도 2열을 유지하되 여백만 더 줄임 */
+  @media (max-width: 340px){
+    #previewGrid{
+      gap:10px 8px;
+      padding:14px 10px 48px;
+    }
+  }
+
+  .gallery-header{
+    position:sticky;
+    top:0;
+    z-index:5;
+    background:var(--wall);
+    border-bottom:1px solid var(--line);
+    padding:22px 28px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .gallery-header h1{
+    font-family:'Playfair Display', serif;
+    font-weight:600;
+    font-size:22px;
+    margin:0;
+  }
+  .gallery-header .sub{
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-top:4px;
+  }
+  #newGalleryBtn{
+    background:transparent;
+    border:1px solid var(--ink);
+    color:var(--ink);
+    padding:9px 16px;
+    border-radius:3px;
+    font-size:13px;
+    font-weight:500;
+    cursor:pointer;
+    font-family:'Work Sans', sans-serif;
+  }
+  #newGalleryBtn:hover{ background:var(--ink); color:#fff; }
+
+  #importVotesBtn{
+    background:var(--brass-deep);
+    border:1px solid var(--brass-deep);
+    color:#fff;
+    padding:9px 16px;
+    border-radius:3px;
+    font-size:13px;
+    font-weight:500;
+    cursor:pointer;
+    font-family:'Work Sans', sans-serif;
+  }
+  #importVotesBtn:hover{ background:var(--brass); border-color:var(--brass); }
+
+  #previewBtn{
+    background:transparent;
+    border:1px solid var(--ink);
+    color:var(--ink);
+    padding:9px 16px;
+    border-radius:3px;
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:0.04em;
+    cursor:pointer;
+    font-family:'Work Sans', sans-serif;
+  }
+  #previewBtn:hover{ background:var(--ink); color:#fff; }
+
+  .plaque .vote-count{
+    display:block;
+    margin-top:2px;
+    font-size:10.5px;
+    color:var(--ink-soft);
+  }
+
+  /* ---------- CSV 업로드 모달 ---------- */
+  .modal-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(32,29,26,0.45);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:100;
+    padding:20px;
+  }
+  .modal-box{
+    background:#fff;
+    border-radius:6px;
+    width:100%;
+    max-width:480px;
+    max-height:86vh;
+    overflow-y:auto;
+    padding:28px;
+    box-shadow:0 12px 40px rgba(0,0,0,0.25);
+  }
+  .modal-box h2{
+    font-family:'Playfair Display', serif;
+    font-size:19px;
+    margin:0 0 6px;
+  }
+  .modal-box .modal-sub{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-bottom:18px;
+    line-height:1.6;
+  }
+  .modal-box label{
+    display:block;
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+    letter-spacing:0.03em;
+  }
+  .modal-box select{
+    width:100%;
+    padding:10px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-size:13px;
+    font-family:'Work Sans', sans-serif;
+    margin-bottom:16px;
+    background:#fff;
+  }
+  .modal-preview{
+    background:var(--wall);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:10px 12px;
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-bottom:18px;
+    max-height:120px;
+    overflow-y:auto;
+  }
+  .modal-preview div{ padding:2px 0; }
+  .modal-actions{
+    display:flex;
+    gap:10px;
+    justify-content:flex-end;
+  }
+  .modal-actions button{
+    padding:10px 18px;
+    border-radius:3px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:'Work Sans', sans-serif;
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--ink);
+  }
+  .modal-actions button.primary{
+    background:var(--ink);
+    color:#fff;
+    border-color:var(--ink);
+  }
+  .modal-actions button.primary:hover{ background:var(--brass-deep); border-color:var(--brass-deep); }
+  .modal-actions button.primary:disabled{ background:#c9c3b8; border-color:#c9c3b8; cursor:not-allowed; }
+  .modal-error{
+    font-size:12px;
+    color:var(--rose-deep);
+    margin:-8px 0 14px;
+  }
+  .modal-result{
+    font-size:13px;
+    line-height:1.7;
+    margin-bottom:6px;
+  }
+  .modal-result b{ color:var(--brass-deep); }
+
+  .vote-banner{
+    text-align:center;
+    padding:22px 20px 6px;
+  }
+  .vote-banner .line1{
+    font-family:'Playfair Display', serif;
+    font-style:italic;
+    font-size:19px;
+    color:var(--ink);
+  }
+  .vote-banner .line2{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-top:6px;
+    letter-spacing:0.02em;
+  }
+
+  #grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, 250px);
+    justify-content:center;
+    gap:34px 26px;
+    padding:30px 24px 70px;
+  }
+
+  .artwork{
+    width:250px;
+  }
+  .frame{
+    width:250px;
+    height:250px;
+    background:#fff;
+    border:1px solid var(--line);
+    padding:8px;
+    box-shadow:0 1px 3px rgba(32,29,26,0.06);
+    position:relative;
+    overflow:hidden;
+    cursor:pointer;
+    transition:box-shadow .15s ease, border-color .15s ease;
+  }
+  .frame:hover{
+    border-color:var(--brass);
+    box-shadow:0 3px 10px rgba(32,29,26,0.12);
+  }
+  .frame img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+    background:var(--wall-deep);
+  }
+  .plaque{
+    margin-top:10px;
+    text-align:center;
+  }
+  .plaque .num{
+    font-family:'Playfair Display', serif;
+    font-weight:600;
+    font-size:15px;
+    color:var(--ink);
+  }
+  .plaque .num::before{
+    content:"No. ";
+    font-size:11px;
+    color:var(--brass-deep);
+    letter-spacing:0.08em;
+    font-family:'Work Sans', sans-serif;
+    font-weight:600;
+  }
+
+  /* 갤러리 생성 화면(#grid)에서는 "No." 없이 숫자만, 더 크고 잘 보이게 표시 (PREVIEW 화면은 기본 스타일 유지) */
+  #grid .plaque{
+    margin-top:12px;
+  }
+  #grid .plaque .num{
+    font-size:30px;
+    font-weight:700;
+  }
+  #grid .plaque .num::before{
+    content:none;
+  }
+  .plaque .award-label{
+    display:block;
+    margin-top:3px;
+    font-size:10.5px;
+    font-weight:600;
+    letter-spacing:0.06em;
+  }
+  .plaque .award-label.is-awarded{ color:var(--brass-deep); }
+
+  /* 상장 리본 */
+  .ribbon{
+    position:absolute;
+    top:16px;
+    right:-42px;
+    width:160px;
+    transform:rotate(45deg);
+    text-align:center;
+    padding:6px 0;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:0.06em;
+    color:#fff;
+    background:linear-gradient(180deg, var(--brass), var(--brass-deep));
+    box-shadow:0 1px 4px rgba(0,0,0,0.28);
+    pointer-events:none;
+    font-family:'Work Sans', sans-serif;
+  }
+
+  /* 상장 선택 메뉴 */
+  .award-menu{
+    position:fixed;
+    z-index:50;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:6px;
+    box-shadow:0 8px 24px rgba(32,29,26,0.18);
+    padding:6px;
+    min-width:170px;
+    font-family:'Work Sans', sans-serif;
+  }
+  .award-menu .menu-label{
+    font-size:10.5px;
+    letter-spacing:0.08em;
+    color:var(--ink-soft);
+    padding:6px 10px 4px;
+    text-transform:uppercase;
+    font-weight:600;
+  }
+  .award-menu button{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    width:100%;
+    text-align:left;
+    border:none;
+    background:transparent;
+    padding:9px 10px;
+    font-size:13.5px;
+    color:var(--ink);
+    border-radius:4px;
+    cursor:pointer;
+    font-family:'Work Sans', sans-serif;
+  }
+  .award-menu button:hover{ background:var(--wall); }
+  .award-menu button .dot{
+    width:9px; height:9px; border-radius:50%; flex-shrink:0;
+  }
+  .award-menu button.tier-grand .dot{ background:var(--gold); }
+  .award-menu button.tier-excellent .dot{ background:var(--rose); }
+  .award-menu button.tier-merit .dot{ background:var(--sage); }
+  .award-menu button.clear{ color:var(--ink-soft); }
+  .award-menu button.clear .dot{ background:var(--line); border:1px solid #c9c3b8; }
+  .award-menu hr{
+    border:none;
+    border-top:1px solid var(--line);
+    margin:5px 4px;
+  }
+
+  footer.gallery-footer{
+    text-align:center;
+    padding:0 20px 40px;
+    font-size:11.5px;
+    color:#a29c8f;
+    letter-spacing:0.03em;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ 업로드 화면 ============ -->
+<div id="uploadScreen">
+  <div class="brand">
+    <div class="eyebrow">Student Art Exhibition</div>
+    <h1>작품 전시 갤러리 만들기</h1>
+    <p>작품 파일을 올리고 버튼을 누르면 전시 갤러리가 바로 만들어집니다.</p>
+  </div>
+
+  <div class="panel">
+    <div class="dropzone" id="dropzone">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#201d1a" stroke-width="1.4">
+        <path d="M12 16V4M12 4l-4 4M12 4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="main">클릭하거나 파일을 끌어다 놓으세요</div>
+      <div class="sub">JPG, PNG, GIF 등 이미지 파일 · 여러 개 선택 가능 · GIF는 갤러리에서 움직입니다</div>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" multiple>
+
+    <div id="fileList"></div>
+    <div class="count-line" id="countLine"></div>
+
+    <button id="generateBtn" disabled>갤러리 생성</button>
+  </div>
+</div>
+
+<!-- ============ 갤러리 화면 ============ -->
+<div id="galleryScreen">
+  <div class="gallery-header">
+    <div>
+      <h1>학생 작품 전시회</h1>
+      <div class="sub" id="galleryCount"></div>
+    </div>
+    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+      <div style="display:flex; gap:8px;">
+        <button id="previewBtn">PREVIEW</button>
+        <button id="importVotesBtn">투표 결과 업로드 (CSV)</button>
+        <button id="newGalleryBtn">새 갤러리 만들기</button>
+      </div>
+      <span style="font-size:11px; color:var(--ink-soft);">작품을 클릭하면 우수작을 선정할 수 있어요</span>
+    </div>
+  </div>
+  <input type="file" id="csvInput" accept=".csv" style="display:none;">
+  <div id="modalRoot"></div>
+
+  <div class="vote-banner">
+    <div class="line1">가장 마음에 든 작품을 마음속으로 선택하세요</div>
+    <div class="line2">작품 번호만 기억해 두시면 됩니다</div>
+  </div>
+
+  <div id="grid"></div>
+
+  <footer class="gallery-footer">전시 번호는 업로드 순서에 따라 1번부터 부여되며 파일명과는 무관합니다</footer>
+</div>
+
+<!-- ============ PREVIEW 화면 (기능 없이 보기 전용) ============ -->
+<div id="previewScreen">
+  <div class="gallery-header">
+    <div>
+      <h1>학생 작품 전시회</h1>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button id="exportPreviewBtn">학생용 파일로 내보내기</button>
+      <button id="backFromPreviewBtn">편집으로 돌아가기</button>
+    </div>
+  </div>
+
+  <div class="vote-banner">
+    <div class="line1">가장 마음에 든 작품을 마음속으로 선택하세요</div>
+    <div class="line2">작품 번호만 기억해 두시면 됩니다</div>
+  </div>
+
+  <div id="previewGrid"></div>
+
+  <footer class="gallery-footer">전시 번호는 업로드 순서에 따라 1번부터 부여되며 파일명과는 무관합니다</footer>
+</div>
+
+<script>
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const fileList = document.getElementById('fileList');
+  const countLine = document.getElementById('countLine');
+  const generateBtn = document.getElementById('generateBtn');
+  const uploadScreen = document.getElementById('uploadScreen');
+  const galleryScreen = document.getElementById('galleryScreen');
+  const grid = document.getElementById('grid');
+  const galleryCount = document.getElementById('galleryCount');
+  const newGalleryBtn = document.getElementById('newGalleryBtn');
+
+  let files = []; // 업로드 순서를 그대로 유지하는 배열
+
+  dropzone.addEventListener('click', () => fileInput.click());
+
+  ['dragenter','dragover'].forEach(evt=>{
+    dropzone.addEventListener(evt, e=>{
+      e.preventDefault();
+      dropzone.classList.add('drag');
+    });
+  });
+  ['dragleave','drop'].forEach(evt=>{
+    dropzone.addEventListener(evt, e=>{
+      e.preventDefault();
+      dropzone.classList.remove('drag');
+    });
+  });
+  dropzone.addEventListener('drop', e=>{
+    const dropped = Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/'));
+    addFiles(dropped);
+  });
+
+  fileInput.addEventListener('change', e=>{
+    addFiles(Array.from(e.target.files));
+    fileInput.value = '';
+  });
+
+  function addFiles(newFiles){
+    files = files.concat(newFiles);
+    renderFileList();
+  }
+
+  function renderFileList(){
+    fileList.innerHTML = '';
+    files.forEach((f, i)=>{
+      const row = document.createElement('div');
+      row.className = 'file-row';
+      const isGif = f.type === 'image/gif';
+      row.innerHTML = `
+        <span class="num">${i+1}</span>
+        <span class="name">${escapeHtml(f.name)}</span>
+        ${isGif ? '<span class="badge">GIF</span>' : ''}
+      `;
+      fileList.appendChild(row);
+    });
+    countLine.textContent = files.length > 0 ? `총 ${files.length}개의 작품이 등록되었습니다` : '';
+    generateBtn.disabled = files.length === 0;
+  }
+
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  generateBtn.addEventListener('click', buildGallery);
+
+  let awards = new Set(); // 우수작으로 선정된 index 모음 (순위 없음)
+  let voteCounts = {};    // index -> 득표수 (CSV 업로드 시 채워짐)
+
+  function buildGallery(){
+    grid.innerHTML = '';
+    awards = new Set();
+    voteCounts = {};
+    files.forEach((file, index)=>{
+      const url = URL.createObjectURL(file);
+      const item = document.createElement('div');
+      item.className = 'artwork';
+      item.dataset.index = index;
+      item.innerHTML = `
+        <div class="frame">
+          <img src="${url}" alt="작품 ${index+1}">
+        </div>
+        <div class="plaque">
+          <span class="num">${index+1}</span>
+          <span class="vote-count"></span>
+          <span class="award-label"></span>
+        </div>
+      `;
+      item.querySelector('.frame').addEventListener('click', (e)=> openAwardMenu(e, index));
+      grid.appendChild(item);
+    });
+    updateAwardSummary();
+    uploadScreen.style.display = 'none';
+    galleryScreen.style.display = 'block';
+    window.scrollTo(0,0);
+  }
+
+  function updateAwardSummary(){
+    const n = awards.size;
+    let text = `총 ${files.length}점 전시 중`;
+    if(n > 0) text += ` · 우수작 ${n}점 선정됨`;
+    const totalVotes = Object.values(voteCounts).reduce((a,b)=>a+b, 0);
+    if(totalVotes > 0) text += ` · 투표 총 ${totalVotes}표 집계됨`;
+    galleryCount.textContent = text;
+  }
+
+  function renderArtworkAward(index){
+    const item = grid.querySelector(`.artwork[data-index="${index}"]`);
+    if(!item) return;
+    const frame = item.querySelector('.frame');
+    const existingRibbon = frame.querySelector('.ribbon');
+    if(existingRibbon) existingRibbon.remove();
+    const labelEl = item.querySelector('.award-label');
+    const voteEl = item.querySelector('.vote-count');
+
+    voteEl.textContent = voteCounts[index] !== undefined ? `${voteCounts[index]}표` : '';
+
+    if(awards.has(index)){
+      const ribbon = document.createElement('div');
+      ribbon.className = 'ribbon';
+      ribbon.textContent = '우수작';
+      frame.appendChild(ribbon);
+      labelEl.textContent = '우수작';
+      labelEl.className = 'award-label is-awarded';
+    } else {
+      labelEl.textContent = '';
+      labelEl.className = 'award-label';
+    }
+  }
+
+  let currentMenu = null;
+  function closeAwardMenu(){
+    if(currentMenu){
+      currentMenu.remove();
+      currentMenu = null;
+      document.removeEventListener('mousedown', handleOutsideClick, true);
+      document.removeEventListener('keydown', handleEscape, true);
+    }
+  }
+  function handleOutsideClick(e){
+    if(currentMenu && !currentMenu.contains(e.target)) closeAwardMenu();
+  }
+  function handleEscape(e){
+    if(e.key === 'Escape') closeAwardMenu();
+  }
+
+  function openAwardMenu(e, index){
+    e.stopPropagation();
+    closeAwardMenu();
+
+    const isAwarded = awards.has(index);
+    const menu = document.createElement('div');
+    menu.className = 'award-menu';
+    menu.innerHTML = `
+      <div class="menu-label">${index+1}번 작품</div>
+      ${isAwarded
+        ? `<button class="clear" data-action="clear"><span class="dot"></span>우수작 선정 해제</button>`
+        : `<button class="award" data-action="award"><span class="dot"></span>우수작으로 선정</button>`
+      }
+    `;
+    document.body.appendChild(menu);
+
+    // 화면 밖으로 나가지 않도록 위치 보정
+    const menuWidth = menu.offsetWidth;
+    const menuHeight = menu.offsetHeight;
+    let left = e.clientX;
+    let top = e.clientY;
+    if(left + menuWidth > window.innerWidth - 12) left = window.innerWidth - menuWidth - 12;
+    if(top + menuHeight > window.innerHeight - 12) top = window.innerHeight - menuHeight - 12;
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+
+    menu.querySelectorAll('button').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        if(btn.dataset.action === 'award'){
+          awards.add(index);
+        } else {
+          awards.delete(index);
+        }
+        renderArtworkAward(index);
+        updateAwardSummary();
+        closeAwardMenu();
+      });
+    });
+
+    currentMenu = menu;
+    setTimeout(()=>{
+      document.addEventListener('mousedown', handleOutsideClick, true);
+      document.addEventListener('keydown', handleEscape, true);
+    }, 0);
+  }
+
+  newGalleryBtn.addEventListener('click', ()=>{
+    files = [];
+    awards = new Set();
+    voteCounts = {};
+    renderFileList();
+    grid.innerHTML = '';
+    galleryScreen.style.display = 'none';
+    uploadScreen.style.display = 'flex';
+  });
+
+  /* ================= 구글 폼 투표 결과(CSV) 업로드 ================= */
+
+  const importVotesBtn = document.getElementById('importVotesBtn');
+  const csvInput = document.getElementById('csvInput');
+  const modalRoot = document.getElementById('modalRoot');
+
+  const previewBtn = document.getElementById('previewBtn');
+  const previewScreen = document.getElementById('previewScreen');
+  const previewGrid = document.getElementById('previewGrid');
+  const backFromPreviewBtn = document.getElementById('backFromPreviewBtn');
+
+  previewBtn.addEventListener('click', ()=>{
+    // 현재 갤러리 화면을 그대로 복제하되, 클릭 이벤트 등 기능은 전혀 없는 보기 전용 화면으로 전환
+    previewGrid.innerHTML = grid.innerHTML;
+    galleryScreen.style.display = 'none';
+    previewScreen.style.display = 'block';
+    window.scrollTo(0,0);
+  });
+
+  backFromPreviewBtn.addEventListener('click', ()=>{
+    previewScreen.style.display = 'none';
+    galleryScreen.style.display = 'block';
+    window.scrollTo(0,0);
+  });
+
+  /* ================= 학생용 독립 HTML 파일로 내보내기 ================= */
+
+  const exportPreviewBtn = document.getElementById('exportPreviewBtn');
+  exportPreviewBtn.addEventListener('click', exportPreviewHTML);
+
+  function fileToDataURL(file){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=> resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function exportPreviewHTML(){
+    if(files.length === 0) return;
+    const originalLabel = exportPreviewBtn.textContent;
+    exportPreviewBtn.disabled = true;
+    exportPreviewBtn.textContent = '내보내는 중...';
+    try{
+      const dataUrls = await Promise.all(files.map(fileToDataURL));
+
+      const itemsHtml = files.map((file, index)=>{
+        const isAwarded = awards.has(index);
+        const voteText = voteCounts[index] !== undefined ? `${voteCounts[index]}표` : '';
+        return `
+        <div class="artwork">
+          <div class="frame">
+            <img src="${dataUrls[index]}" alt="작품 ${index+1}">
+            ${isAwarded ? '<div class="ribbon">우수작</div>' : ''}
+          </div>
+          <div class="plaque">
+            <span class="num">${index+1}</span>
+            <span class="vote-count">${voteText}</span>
+            <span class="award-label${isAwarded ? ' is-awarded' : ''}">${isAwarded ? '우수작' : ''}</span>
+          </div>
+        </div>`;
+      }).join('\n');
+
+      const html = buildStandaloneHTML(itemsHtml);
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'student-gallery-preview.html';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=> URL.revokeObjectURL(url), 8000);
+
+      openExportGuideModal();
+    } catch(err){
+      openSimpleModal('내보내기 실패', '파일을 변환하는 중 문제가 발생했습니다. 이미지 용량이 너무 크지 않은지 확인하고 다시 시도해 주세요.');
+    } finally {
+      exportPreviewBtn.disabled = false;
+      exportPreviewBtn.textContent = originalLabel;
+    }
+  }
+
+  function buildStandaloneHTML(itemsHtml){
+    // 갤러리 앱 원본의 PREVIEW 화면과 동일한 스타일(모바일 반응형 포함)을 그대로 옮겨,
+    // 업로드/CSV/우수작 선정 등 어떠한 기능도 없는 순수 보기 전용 파일을 만든다.
+    return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>학생 작품 전시회 - 미리보기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --wall:#f7f5f1; --wall-deep:#efece5; --ink:#201d1a; --ink-soft:#55504a;
+    --line:#ddd7ca; --brass:#9c7c3f; --brass-deep:#7a6031;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--wall); color:var(--ink); font-family:'Work Sans', sans-serif; }
+  .gallery-header{
+    padding:22px 28px; border-bottom:1px solid var(--line);
+  }
+  .gallery-header h1{
+    font-family:'Playfair Display', serif; font-weight:600; font-size:22px; margin:0;
+  }
+  .vote-banner{ text-align:center; padding:22px 20px 6px; }
+  .vote-banner .line1{ font-family:'Playfair Display', serif; font-style:italic; font-size:19px; }
+  .vote-banner .line2{ font-size:12.5px; color:var(--ink-soft); margin-top:6px; }
+  #previewGrid{
+    display:grid; grid-template-columns:repeat(auto-fill, 250px);
+    justify-content:center; gap:34px 26px; padding:30px 24px 70px;
+  }
+  .artwork{ width:250px; }
+  .frame{
+    width:250px; height:250px; background:#fff; border:1px solid var(--line);
+    padding:8px; box-shadow:0 1px 3px rgba(32,29,26,0.06);
+    position:relative; overflow:hidden;
+  }
+  .frame img{ width:100%; height:100%; object-fit:cover; display:block; background:var(--wall-deep); }
+  .plaque{ margin-top:10px; text-align:center; }
+  .plaque .num{ font-family:'Playfair Display', serif; font-weight:600; font-size:15px; }
+  .plaque .num::before{
+    content:"No. "; font-size:11px; color:var(--brass-deep); letter-spacing:0.08em;
+    font-family:'Work Sans', sans-serif; font-weight:600;
+  }
+  .plaque .vote-count{ display:block; margin-top:2px; font-size:10.5px; color:var(--ink-soft); }
+  .plaque .award-label{ display:block; margin-top:3px; font-size:10.5px; font-weight:600; letter-spacing:0.06em; }
+  .plaque .award-label.is-awarded{ color:var(--brass-deep); }
+  .ribbon{
+    position:absolute; top:16px; right:-42px; width:160px; transform:rotate(45deg);
+    text-align:center; padding:6px 0; font-size:11px; font-weight:700; letter-spacing:0.06em;
+    color:#fff; background:linear-gradient(180deg, var(--brass), var(--brass-deep));
+    box-shadow:0 1px 4px rgba(0,0,0,0.28); pointer-events:none;
+  }
+  .gallery-footer{ text-align:center; padding:0 20px 40px; font-size:11.5px; color:#a29c8f; }
+
+  @media (max-width:640px){
+    .gallery-header{ padding:14px 16px; }
+    .gallery-header h1{ font-size:17px; }
+    .vote-banner{ padding:16px 16px 4px; }
+    .vote-banner .line1{ font-size:clamp(15px, 4.6vw, 18px); line-height:1.4; }
+    .vote-banner .line2{ font-size:11.5px; }
+    #previewGrid{ grid-template-columns:repeat(2, 1fr); gap:14px 10px; padding:16px 14px 56px; }
+    .artwork{ width:100%; }
+    .frame{ width:100%; height:auto; aspect-ratio:1/1; padding:6px; }
+    .plaque{ margin-top:7px; }
+    .plaque .num{ font-size:13px; }
+    .plaque .vote-count{ font-size:10px; }
+    .plaque .award-label{ font-size:9.5px; }
+    .ribbon{ top:9px; right:-32px; width:120px; padding:4px 0; font-size:9px; }
+    .gallery-footer{ font-size:10.5px; padding:0 16px 32px; }
+  }
+  @media (max-width:340px){
+    #previewGrid{ gap:10px 8px; padding:14px 10px 48px; }
+  }
+</style>
+</head>
+<body>
+  <div class="gallery-header"><h1>학생 작품 전시회</h1></div>
+  <div class="vote-banner">
+    <div class="line1">가장 마음에 든 작품을 마음속으로 선택하세요</div>
+    <div class="line2">작품 번호만 기억해 두시면 됩니다</div>
+  </div>
+  <div id="previewGrid">${itemsHtml}
+  </div>
+  <footer class="gallery-footer">전시 번호는 업로드 순서에 따라 1번부터 부여되며 파일명과는 무관합니다</footer>
+</body>
+</html>`;
+  }
+
+  function openExportGuideModal(){
+    modalRoot.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-box">
+          <h2>내보내기 완료</h2>
+          <div class="modal-sub">student-gallery-preview.html 파일이 다운로드되었습니다. 이미지와 우수작 표시가 모두 담긴 완전한 독립 파일이라, 학생들에게 파일 그대로 보내도 됩니다. 링크로 접속하게 하려면 아래 방법 중 하나로 업로드하세요.</div>
+          <div class="modal-result"><b>방법 1 · Netlify Drop</b> (계정 없이 가장 간단)<br>
+            <a href="https://app.netlify.com/drop" target="_blank" rel="noopener">app.netlify.com/drop</a> 접속 → 방금 받은 파일을 화면에 끌어다 놓기 → 즉시 링크 생성
+          </div>
+          <div class="modal-result"><b>방법 2 · GitHub Pages</b> (더 오래 유지하고 싶을 때)<br>
+            GitHub 무료 계정 생성 → 새 저장소(Repository) 생성 → "Add file → Upload files"로 이 파일 업로드 → Settings → Pages에서 활성화 → 몇 분 뒤 링크 생성
+          </div>
+          <div class="modal-actions"><button class="primary" id="modalCloseBtn">확인</button></div>
+        </div>
+      </div>`;
+    modalRoot.querySelector('.modal-overlay').addEventListener('click', (e)=>{ if(e.target.classList.contains('modal-overlay')) closeModal(); });
+    document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+  }
+
+
+  importVotesBtn.addEventListener('click', ()=> csvInput.click());
+  csvInput.addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    csvInput.value = '';
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      try{
+        const { headers, rows } = parseCSV(ev.target.result);
+        if(headers.length === 0 || rows.length === 0){
+          openSimpleModal('CSV 파일을 읽을 수 없습니다', '파일에 데이터가 없거나 형식을 인식하지 못했습니다. 구글 시트에서 "파일 > 다운로드 > 쉼표로 구분된 값(.csv)"으로 다시 내보내 보세요.');
+          return;
+        }
+        openColumnPickerModal(headers, rows);
+      }catch(err){
+        openSimpleModal('CSV 파일을 읽을 수 없습니다', '파일 형식을 확인한 뒤 다시 시도해 주세요.');
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+  });
+
+  // 쉼표로 구분된 값과 큰따옴표로 감싸진 필드(내부 쉼표·줄바꿈 포함)를 함께 처리하는 간단한 CSV 파서
+  function parseCSV(text){
+    text = text.replace(/^\uFEFF/, ''); // BOM 제거
+    const rows = [];
+    let row = [];
+    let field = '';
+    let inQuotes = false;
+    for(let i=0; i<text.length; i++){
+      const c = text[i];
+      if(inQuotes){
+        if(c === '"'){
+          if(text[i+1] === '"'){ field += '"'; i++; }
+          else inQuotes = false;
+        } else field += c;
+      } else {
+        if(c === '"') inQuotes = true;
+        else if(c === ','){ row.push(field); field = ''; }
+        else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+        else if(c === '\r'){ /* skip, \n이 처리함 */ }
+        else field += c;
+      }
+    }
+    if(field.length > 0 || row.length > 0){ row.push(field); rows.push(row); }
+    const cleaned = rows.filter(r => r.some(cell => cell.trim() !== ''));
+    if(cleaned.length === 0) return { headers: [], rows: [] };
+    const headers = cleaned[0];
+    const dataRows = cleaned.slice(1);
+    return { headers, rows: dataRows };
+  }
+
+  // "1번", "No.1", " 1 ", "1 - 제목" 등에서 맨 앞의 숫자만 추출
+  function extractNumber(str){
+    if(str === undefined || str === null) return null;
+    const m = String(str).match(/\d+/);
+    return m ? parseInt(m[0], 10) : null;
+  }
+
+  function closeModal(){ modalRoot.innerHTML = ''; }
+
+  function openSimpleModal(title, message){
+    modalRoot.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-box">
+          <h2>${escapeHtml(title)}</h2>
+          <div class="modal-sub">${escapeHtml(message)}</div>
+          <div class="modal-actions"><button class="primary" id="modalCloseBtn">확인</button></div>
+        </div>
+      </div>`;
+    modalRoot.querySelector('.modal-overlay').addEventListener('click', (e)=>{ if(e.target.classList.contains('modal-overlay')) closeModal(); });
+    document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+  }
+
+  function openColumnPickerModal(headers, rows){
+    modalRoot.innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal-box">
+          <h2>투표 결과 업로드</h2>
+          <div class="modal-sub">구글 폼 응답 중 "가장 마음에 든 작품 번호"를 담은 열을 선택하세요. 총 ${rows.length}개의 응답을 찾았습니다.</div>
+          <label for="colSelect">투표 응답 열</label>
+          <select id="colSelect">
+            ${headers.map((h, i)=>`<option value="${i}">${escapeHtml(h || `(${i+1}번째 열)`)}</option>`).join('')}
+          </select>
+          <div class="modal-preview" id="colPreview"></div>
+          <div class="modal-error" id="colError" style="display:none;"></div>
+          <div class="modal-actions">
+            <button id="modalCancelBtn">취소</button>
+            <button class="primary" id="modalApplyBtn">상위 3개 자동 선정</button>
+          </div>
+        </div>
+      </div>`;
+
+    const overlay = modalRoot.querySelector('.modal-overlay');
+    const select = document.getElementById('colSelect');
+    const preview = document.getElementById('colPreview');
+    const errorBox = document.getElementById('colError');
+
+    function updatePreview(){
+      const colIndex = parseInt(select.value, 10);
+      const sample = rows.slice(0, 5).map(r => r[colIndex] !== undefined ? r[colIndex] : '').filter(v => v !== '');
+      preview.innerHTML = sample.length
+        ? sample.map(v => `<div>· ${escapeHtml(v)}</div>`).join('')
+        : '<div>이 열에서 표시할 값을 찾지 못했습니다</div>';
+    }
+    // 헤더나 응답 내용에 "작품", "번호", "선택" 등이 포함된 열을 우선 선택되도록 시도
+    const guessIndex = headers.findIndex(h => /작품|번호|선택|투표/.test(h || ''));
+    if(guessIndex > -1) select.value = String(guessIndex);
+    updatePreview();
+    select.addEventListener('change', updatePreview);
+
+    overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
+    document.getElementById('modalCancelBtn').addEventListener('click', closeModal);
+
+    document.getElementById('modalApplyBtn').addEventListener('click', ()=>{
+      const colIndex = parseInt(select.value, 10);
+      const counts = {};
+      let validVotes = 0;
+      rows.forEach(r=>{
+        const num = extractNumber(r[colIndex]);
+        if(num !== null && num >= 1 && num <= files.length){
+          const idx = num - 1;
+          counts[idx] = (counts[idx] || 0) + 1;
+          validVotes++;
+        }
+      });
+
+      if(validVotes === 0){
+        errorBox.style.display = 'block';
+        errorBox.textContent = '선택한 열에서 1 ~ ' + files.length + ' 사이의 작품 번호를 찾지 못했습니다. 다른 열을 선택해 주세요.';
+        return;
+      }
+
+      applyVoteResults(counts);
+      closeModal();
+    });
+  }
+
+  function applyVoteResults(counts){
+    voteCounts = counts;
+
+    // 득표수 내림차순 정렬 후 상위 3위 안에 드는 작품을 모두 우수작으로 선정 (동점자는 함께 포함, 순위는 표시하지 않음)
+    const ranked = Object.entries(counts)
+      .map(([idx, c]) => ({ idx: parseInt(idx, 10), count: c }))
+      .sort((a, b) => b.count - a.count);
+
+    const uniqueCounts = [...new Set(ranked.map(r => r.count))].sort((a,b)=>b-a);
+    const cutoff = uniqueCounts.slice(0, 3);
+    const minWinningCount = cutoff[cutoff.length - 1];
+
+    const winners = ranked.filter(r => r.count >= minWinningCount).map(r => r.idx);
+    awards = new Set(winners);
+
+    files.forEach((_, index) => renderArtworkAward(index));
+    updateAwardSummary();
+
+    const tieNote = winners.length > 3 ? ` (동점으로 ${winners.length}점이 함께 선정되었습니다)` : '';
+    openSimpleModal(
+      '우수작 자동 선정 완료',
+      `득표수 상위 3위 작품이 우수작으로 표시되었습니다${tieNote}. 필요하면 작품을 클릭해 직접 조정할 수 있습니다.`
+    );
+  }
+</script>
+</body>
+</html>
