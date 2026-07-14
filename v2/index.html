@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Stickman Class</title>
+
+<style>
+html, body { margin:0; height:100%; }
+body {
+  font-family:sans-serif;
+  background:#f2f2f2;
+  display:flex;
+  justify-content:center;
+}
+
+#appWrap {
+  width:100%;
+  max-width:600px;
+  min-height:100%;
+  margin:0 auto;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:32px 24px;
+  gap:36px;
+}
+
+/* 로고 영역 */
+.logoArea {
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:14px;
+}
+
+.logoRow {
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+}
+
+.logoImg {
+  width:56px;
+  height:56px;
+  object-fit:contain;
+  filter:drop-shadow(0 4px 8px rgba(0,0,0,0.15));
+  flex-shrink:0;
+}
+
+.logoTitle {
+  font-size:19px;
+  font-weight:900;
+  letter-spacing:1px;
+  color:#222;
+  text-align:center;
+  white-space:nowrap;
+}
+
+.logoSub {
+  font-size:14px;
+  color:#888;
+  text-align:center;
+}
+
+/* 이름 입력 / 반 선택 영역 */
+.inputArea {
+  width:100%;
+  max-width:340px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.inputArea label {
+  font-size:13px;
+  color:#666;
+  font-weight:bold;
+  padding-left:2px;
+}
+
+.inputArea input[type="text"],
+.inputArea select {
+  width:100%;
+  box-sizing:border-box;
+  padding:14px 14px;
+  font-size:16px;
+  border-radius:12px;
+  border:1px solid #ccc;
+  background:#fff;
+  touch-action:manipulation;
+}
+
+.inputArea input[type="text"]:focus,
+.inputArea select:focus {
+  outline:2px solid #2ecc71;
+  border-color:#2ecc71;
+}
+
+/* 버튼 영역 */
+.menuArea {
+  width:100%;
+  max-width:340px;
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+
+.menuBtn {
+  width:100%;
+  box-sizing:border-box;
+  padding:18px 20px;
+  font-size:18px;
+  font-weight:bold;
+  border-radius:14px;
+  border:none;
+  cursor:pointer;
+  touch-action:manipulation;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+}
+
+.startBtn {
+  background:#2ecc71;
+  color:#fff;
+  box-shadow:0 4px 10px rgba(46,204,113,0.35);
+}
+.startBtn:active { background:#27ae60; }
+
+.specialBtn {
+  background:#9b59b6;
+  color:#fff;
+  box-shadow:0 4px 10px rgba(155,89,182,0.35);
+}
+.specialBtn:active { background:#8e44ad; }
+
+.voteBtn {
+  background:#3498db;
+  color:#fff;
+  box-shadow:0 4px 10px rgba(52,152,219,0.35);
+}
+.voteBtn:active { background:#2980b9; }
+
+/* 토스트 */
+#toast {
+  position:fixed;
+  left:50%;
+  bottom:40px;
+  transform:translateX(-50%) translateY(10px);
+  background:rgba(0,0,0,0.8);
+  color:#fff;
+  padding:10px 18px;
+  border-radius:20px;
+  font-size:14px;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity 0.25s ease, transform 0.25s ease;
+  z-index:999;
+  white-space:nowrap;
+}
+#toast.show {
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+</style>
+</head>
+
+<body>
+
+<div id="appWrap">
+
+  <div class="logoArea">
+    <div class="logoRow">
+      <!-- 스틱맨 로고 이미지 (원격 이미지가 안 열리면 간단한 스틱맨 SVG로 대체) -->
+      <img class="logoImg" id="logoImg"
+           src="https://miahwang2000.github.io/stickman/images/walk1.png"
+           alt="Stickman Class 로고"
+           onerror="this.onerror=null; this.replaceWith(fallbackLogo());">
+      <div class="logoTitle">STICKMAN CLASS</div>
+    </div>
+    <div class="logoSub">스틱맨으로 배우는 프레임 애니메이션</div>
+  </div>
+
+  <div class="inputArea">
+    <div>
+      <label for="studentNameInput">이름</label>
+      <input type="text" id="studentNameInput" placeholder="이름을 입력하세요" maxlength="20">
+    </div>
+    <div>
+      <label for="classSelect">반 선택</label>
+      <select id="classSelect">
+        <option value="">반을 선택하세요</option>
+        <option value="신남초 돌봄A|2026/class_A">신남초 돌봄A</option>
+        <option value="신남초 돌봄B|2026/class_B">신남초 돌봄B</option>
+        <option value="신도림초 A|2026/class_sd_A">신도림초 A</option>
+        <option value="신도림초 B|2026/class_sd_B">신도림초 B</option>
+        <option value="등현초A|2026/class_dh_A">등현초A</option>
+        <option value="등현초B|2026/class_dh_B">등현초B</option>
+        <option value="신남초 A|2026/class_sn_A">신남초 A</option>
+        <option value="신남초 B|2026/class_sn_B">신남초 B</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="menuArea">
+    <button class="menuBtn startBtn" onclick="startClass()">▶️ 수업 시작</button>
+    <button class="menuBtn specialBtn" onclick="goSpecial()">✨ 스페셜 페이지</button>
+    <button class="menuBtn voteBtn" onclick="goVote()">🗳️ 작품 투표하기</button>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* 로고 이미지 로딩 실패 시 대체할 간단한 스틱맨 SVG */
+function fallbackLogo(){
+  const wrapper = document.createElement("div");
+  wrapper.className = "logoImg";
+  wrapper.innerHTML = `
+    <svg viewBox="0 0 100 100" width="56" height="56" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="50" cy="20" r="12" fill="none" stroke="#333" stroke-width="4"/>
+      <line x1="50" y1="32" x2="50" y2="65" stroke="#333" stroke-width="4"/>
+      <line x1="50" y1="42" x2="30" y2="55" stroke="#333" stroke-width="4"/>
+      <line x1="50" y1="42" x2="70" y2="55" stroke="#333" stroke-width="4"/>
+      <line x1="50" y1="65" x2="32" y2="90" stroke="#333" stroke-width="4"/>
+      <line x1="50" y1="65" x2="68" y2="90" stroke="#333" stroke-width="4"/>
+    </svg>
+  `;
+  return wrapper;
+}
+
+/* stage.html / special.html에서 사용하는 자동저장 키 */
+const STAGE_STORAGE_KEY = "stickmanClassFinal_autoSave_v1";
+const SPECIAL_STORAGE_KEY = "stickmanClass_special_v1";
+
+let toastTimer = null;
+function showToast(msg){
+  const el = document.getElementById("toast");
+  el.innerText = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ el.classList.remove("show"); }, 900);
+}
+
+/* stage.html에서 사용할 학생 이름 / 반 정보 저장 키 */
+const STUDENT_NAME_KEY = "studentName";
+const STUDENT_CLASS_LABEL_KEY = "studentClassLabel";   // 화면 표시용 반 이름 (예: 신도림초 A)
+const STUDENT_CLASS_FOLDER_KEY = "studentClassFolder"; // Cloudinary 업로드 폴더 경로 (예: 2026/class_sd_A)
+
+/* 수업 시작: 이름/반 입력을 확인한 뒤, 그동안의 모든 기록(스테이지 그림 + 스페셜 업로드)을
+   삭제하고 스테이지 1부터 다시 시작하도록 stage.html로 이동 */
+function startClass(){
+  const nameInput = document.getElementById("studentNameInput");
+  const classSelect = document.getElementById("classSelect");
+
+  const name = nameInput.value.trim();
+  if(!name){
+    showToast("이름을 입력해주세요");
+    nameInput.focus();
+    return;
+  }
+
+  const classValue = classSelect.value;
+  if(!classValue){
+    showToast("반을 선택해주세요");
+    classSelect.focus();
+    return;
+  }
+
+  const [classLabel, classFolder] = classValue.split("|");
+
+  try{
+    localStorage.removeItem(STAGE_STORAGE_KEY);
+    localStorage.removeItem(SPECIAL_STORAGE_KEY);
+    localStorage.setItem(STUDENT_NAME_KEY, name);
+    localStorage.setItem(STUDENT_CLASS_LABEL_KEY, classLabel);
+    localStorage.setItem(STUDENT_CLASS_FOLDER_KEY, classFolder);
+  } catch(e){
+    console.warn("정보 저장 중 문제가 발생했습니다:", e);
+  }
+  showToast("모든 기록을 초기화했습니다");
+  location.href = "stage.html";
+}
+
+function goSpecial(){
+  location.href = "special.html";
+}
+
+function goVote(){
+  window.open("https://forms.gle/3Y9KJ7aDMK2eLpw7A", "_blank");
+}
+</script>
+</body>
+</html>
