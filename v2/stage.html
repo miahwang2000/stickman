@@ -741,13 +741,15 @@ function sanitizeForFilename(str){
 
 function uploadGifToCloudinary(blob, publicId, folder){
   const formData = new FormData();
-  // Blob에 파일명을 명시적으로 지정해야 Cloudinary가 "표시 이름(Display Name)"을
-  // 학생 이름 기반으로 정확히 인식한다. (파일명 없이 보내면 Cloudinary가 임의로
-  // 이름을 붙이거나 표시 이름이 public_id와 다르게 나올 수 있음)
-  formData.append("file", blob, publicId + ".gif");
+  // 주의: formData.append("file", blob, filename)처럼 Blob에 직접(특히 한글이 섞인)
+  // 파일명을 지정하면 일부 브라우저/환경에서 멀티파트 요청의 Content-Disposition
+  // 헤더 인코딩 문제로 업로드 자체가 실패할 수 있다.
+  // 대신 Cloudinary가 unsigned 업로드에서 공식 지원하는 "filename_override"
+  // 파라미터(일반 폼 필드, 헤더 아님)를 사용해 표시 이름을 안전하게 지정한다.
+  formData.append("file", blob);
   formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
   formData.append("public_id", publicId);
-  formData.append("display_name", publicId);
+  formData.append("filename_override", publicId + ".gif");
   if(folder){
     // Dynamic Folder Mode 계정은 "folder" 대신 "asset_folder"를 사용해야
     // 폴더 위치가 정확히 지정되고, 폴더가 중첩되지 않는다.
@@ -757,8 +759,17 @@ function uploadGifToCloudinary(blob, publicId, folder){
   return fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
     method: "POST",
     body: formData
-  }).then(res => {
-    if(!res.ok) throw new Error("업로드 실패 (status " + res.status + ")");
+  }).then(async res => {
+    if(!res.ok){
+      let detail = "";
+      try{
+        const errJson = await res.json();
+        detail = errJson && errJson.error && errJson.error.message ? errJson.error.message : JSON.stringify(errJson);
+      } catch(e){
+        detail = await res.text().catch(() => "");
+      }
+      throw new Error("업로드 실패 (status " + res.status + "): " + detail);
+    }
     return res.json();
   });
 }
