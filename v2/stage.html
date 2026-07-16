@@ -442,6 +442,7 @@ function startDraw(clientX, clientY){
   drawing = true;
   const p = getCanvasPos(clientX, clientY);
   strokePoints = [p];
+  applyToolStyle(); // 드래그 없이 탭만 해도 항상 현재 선택된 도구(브러시/지우개) 상태로 그려지도록 보장
   ctx.beginPath();
   ctx.moveTo(p.x, p.y);
 }
@@ -490,6 +491,8 @@ function finishStroke(){
 
 function endDraw(){
   if(!drawing) return; // 이미 끊긴 상태면 중복 처리하지 않음
+
+  applyToolStyle(); // 마무리 획도 항상 현재 선택된 도구 상태로 그려지도록 재확인
 
   // 보정 곡선이 마지막 실제 좌표보다 살짝 앞에서 끝나므로,
   // 스트로크를 마무리할 때 마지막 지점까지 정확히 이어준다
