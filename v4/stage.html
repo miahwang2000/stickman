@@ -534,8 +534,20 @@ renderUI();
    (캔버스가 CSS로 화면 크기에 맞게 늘어나거나 줄어들 수 있으므로,
     실제 내부 해상도(500x500)에 맞게 좌표를 보정해준다 - 모바일 대응)
 ========================= */
+// 모바일에서 손가락을 움직일 때마다(touchmove) getBoundingClientRect()를 다시 계산하면
+// 매번 레이아웃을 강제로 다시 계산(reflow)하게 되어 그리기가 느리게 느껴지는 원인이 됨.
+// 그래서 스트로크를 시작할 때 한 번만 캐시해두고, 화면 크기/방향이 바뀔 때만 다시 계산한다.
+let cachedCanvasRect = null;
+
+function refreshCanvasRect(){
+  cachedCanvasRect = canvas.getBoundingClientRect();
+}
+
+window.addEventListener("resize", refreshCanvasRect);
+window.addEventListener("orientationchange", refreshCanvasRect);
+
 function getCanvasPos(clientX, clientY){
-  const r = canvas.getBoundingClientRect();
+  const r = cachedCanvasRect || canvas.getBoundingClientRect();
   const scaleX = canvas.width / r.width;
   const scaleY = canvas.height / r.height;
   return {
@@ -582,6 +594,7 @@ function applyToolStyle(){
 function startDraw(clientX, clientY){
   if(interval) return;
   drawing = true;
+  refreshCanvasRect(); // 스트로크 시작 시 한 번만 좌표 기준을 갱신 (이후 move 이벤트에서는 재계산하지 않음)
   const p = getCanvasPos(clientX, clientY);
   strokePoints = [p];
   applyToolStyle(); // 드래그 없이 탭만 해도 항상 현재 선택된 도구(브러시/지우개) 상태로 그려지도록 보장
@@ -712,8 +725,51 @@ function loadFrame(i){
      겹쳐서 그려지는 문제(가이드 이미지가 2개로 겹쳐 보이는 현상)가 있었습니다.
      이를 막기 위해 요청마다 고유 ID를 부여하고, 로딩이 끝났을 때 그 ID가
      "가장 최근 요청"이 맞는지 확인한 뒤에만 그리도록 했습니다(오래된 요청은 무시).
+
+   ※ 캐시(guideImageCache): 프레임을 왔다 갔다 할 때마다 같은 가이드 이미지를
+     네트워크로 다시 받아오면 모바일 환경에서 매번 로딩이 지연되는 것처럼 느껴짐.
+     한 번 받은 이미지는 재사용하고, 스테이지에 들어가는 순간 그 스테이지의
+     가이드 이미지를 미리 백그라운드로 받아두어(preloadStageGuides) 프레임을
+     넘길 때는 대부분 캐시에서 바로 그려지도록 함.
 ========================= */
 let guideRequestId = 0;
+const guideImageCache = {}; // src -> HTMLImageElement (완료 여부는 img.complete로 확인)
+
+// 이미지를 캐시에서 즉시 재사용하거나, 없으면 새로 받아서 캐시에 저장
+function getCachedOrLoadImage(src, onload, onerror){
+  let img = guideImageCache[src];
+
+  if(img){
+    if(img.complete && img.naturalWidth > 0){
+      onload(img); // 이미 완전히 로드된 이미지 -> 네트워크 없이 즉시 사용
+      return;
+    }
+    // 아직 로딩 중인 이미지라면(프리로드가 끝나기 전) 로딩이 끝나는 대로 콜백을 실행
+    img.addEventListener("load", () => onload(img));
+    img.addEventListener("error", onerror);
+    return;
+  }
+
+  img = new Image();
+  img.crossOrigin = "anonymous";
+  guideImageCache[src] = img;
+  img.onload = () => onload(img);
+  img.onerror = onerror;
+  img.src = src;
+}
+
+// 스테이지에 진입할 때 그 스테이지의 가이드 이미지들을 미리 백그라운드로 받아둠
+// (화면에 그리지는 않고 캐시에만 저장해서, 프레임을 넘길 때 지연 없이 바로 보이도록 함)
+function preloadStageGuides(stageNum){
+  const set = guideSets[stageNum - 1] || [];
+  set.forEach(src => {
+    if(!src || guideImageCache[src]) return; // 이미 캐시되어 있으면 다시 받지 않음
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    guideImageCache[src] = img;
+    img.src = src;
+  });
+}
 
 function showGuide(frameIndex){
   guideRequestId++;
@@ -726,9 +782,7 @@ function showGuide(frameIndex){
 
   if(!src) return; // 해당 스테이지/프레임에 가이드 이미지가 없으면 그냥 안 보이게 처리 (에러 없음)
 
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  img.onload = () => {
+  getCachedOrLoadImage(src, (img) => {
     // 이 로딩이 시작된 이후에 더 최신 요청(다른 프레임/스테이지 전환 등)이 있었다면 무시
     if(myRequestId !== guideRequestId) return;
     // 재생이 시작된 사이에 이미지가 늦게 로드되는 경우를 대비해 다시 한 번 체크
@@ -739,11 +793,9 @@ function showGuide(frameIndex){
     guideCtx.globalAlpha = 0.3;
     guideCtx.drawImage(img, 0, 0, guideCanvas.width, guideCanvas.height);
     guideCtx.restore();
-  };
-  img.onerror = () => {
+  }, () => {
     console.warn("가이드 이미지를 불러오지 못했습니다. stage:", stage, "frame:", frameIndex, "src:", src);
-  };
-  img.src = src;
+  });
 }
 
 function hideGuide(){
@@ -1000,80 +1052,4 @@ function showToast(msg){
 
 /* =========================
    STAGE
-========================= */
-function goToStage(newStage){
-  stage = newStage;
-
-  stop(); // 혹시 재생 중이면 정지
-
-  document.getElementById("stageText").innerText = "스테이지 " + stage;
-
-  // 1번 스테이지에서는 이전 스테이지 아이콘을 숨김
-  document.getElementById("stageBackBtn").classList.toggle("hidden", stage <= 1);
-
-  showToast("스테이지 " + stage + " 시작!");
-
-  frames = allStageFrames[stage]; // 저장되어 있던 스테이지별 프레임을 불러옴 (없으면 빈 배열)
-  currentFrame = 0;
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  loadFrame(0); // 새 스테이지의 0번 프레임 + 가이드 표시
-
-  saveToLocalStorage();
-}
-
-function nextStage() {
-  let n = stage + 1;
-  if(n > 10) n = 1; // 10스테이지까지만 존재
-  goToStage(n);
-}
-
-function prevStage() {
-  if(stage <= 1) return; // 1번 스테이지에서는 더 이전으로 가지 않음
-  goToStage(stage - 1);
-}
-
-/* =========================
-   다시 그리기 (현재 프레임의 사용자 그림만 초기화, 가이드는 유지)
-========================= */
-function resetCurrentFrame(){
-  if(interval) return; // 재생 중에는 동작 안 함
-
-  frames[currentFrame] = null;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  showGuide(currentFrame); // 가이드는 다시 보여줌
-  saveToLocalStorage();
-}
-
-/* =========================
-   초기화: 저장된 데이터가 있으면 복원
-========================= */
-(function initFromStorage(){
-  const saved = loadFromLocalStorage();
-
-  if(saved && saved.framesByStage){
-    for(let s=1; s<=10; s++){
-      if(saved.framesByStage[s]){
-        allStageFrames[s] = saved.framesByStage[s];
-      }
-    }
-    stage = saved.stage || 1;
-    currentFrame = saved.currentFrame || 0;
-  }
-
-  frames = allStageFrames[stage];
-
-  document.getElementById("stageText").innerText = "스테이지 " + stage;
-  document.getElementById("stageBackBtn").classList.toggle("hidden", stage <= 1);
-
-  loadFrame(currentFrame);
-
-  if(saved){
-    showToast("이전에 저장된 그림을 불러왔습니다");
-  }
-})();
-
-</script>
-</body>
-</html>
+=======================
