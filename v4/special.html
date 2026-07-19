@@ -6,7 +6,7 @@
 <title>스페셜 스테이지 - Stickman Class</title>
 
 <!-- GIF 인코딩 라이브러리 (내부적으로 Web Worker를 사용해 화면 멈춤 없이 백그라운드에서 인코딩함) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js" defer></script>
 
 <style>
 html, body { margin:0; height:100%; }
@@ -308,7 +308,7 @@ button {
 <div class="bottombar">
   <button id="playBtn" onclick="play()" title="PLAY">▶️</button>
   <button onclick="stop()" title="STOP">⏹️</button>
-  <button id="gifBtn" onclick="downloadGif()" title="GIF 다운로드">⬇️</button>
+  <button id="gifBtn" onclick="submitGif()" title="제출하기">📤 제출하기</button>
   <button onclick="resetAll()" title="모두 지우기">🗑️</button>
 </div>
 
@@ -475,30 +475,41 @@ function openActionSheet(i){
   document.getElementById("actionSheetOverlay").classList.add("show");
 }
 
-function closeActionSheet(){
+// 바텀시트를 "닫기만" 함 (pendingSlotIndex는 그대로 유지)
+// - 카메라/갤러리를 고른 경우, 사용자가 실제로 사진을 다 고르기까지 시간이 걸리는
+//   비동기 작업이라서 여기서 pendingSlotIndex를 초기화하면 나중에 change 이벤트가
+//   발생했을 때 어느 슬롯에 넣어야 할지 알 수 없게 되어버림 (실제 버그의 원인이었음)
+function hideActionSheet(){
   document.getElementById("actionSheetOverlay").classList.remove("show");
+}
+
+// 사용자가 진짜로 취소한 경우에만 pendingSlotIndex를 초기화
+function closeActionSheet(){
+  hideActionSheet();
   pendingSlotIndex = null;
 }
 
 function chooseCamera(){
+  hideActionSheet();
   document.getElementById("cameraInput").click();
-  closeActionSheet();
 }
 
 function chooseGallery(){
+  hideActionSheet();
   document.getElementById("galleryInput").click();
-  closeActionSheet();
 }
 
 // 카메라로 촬영 (모바일에서 capture 속성 덕분에 바로 카메라 앱이 열림)
 document.getElementById("cameraInput").addEventListener("change", (e) => {
   if(pendingSlotIndex !== null) handleFileSelect(pendingSlotIndex, e.target.files[0]);
+  pendingSlotIndex = null;
   e.target.value = ""; // 같은 사진을 다시 찍어도 change 이벤트가 발생하도록 초기화
 });
 
 // 사진 보관함(갤러리)에서 선택
 document.getElementById("galleryInput").addEventListener("change", (e) => {
   if(pendingSlotIndex !== null) handleFileSelect(pendingSlotIndex, e.target.files[0]);
+  pendingSlotIndex = null;
   e.target.value = "";
 });
 
@@ -571,7 +582,12 @@ function resetAll(){
 }
 
 /* =========================
-   GIF 다운로드
+   GIF 생성 + 제출 (Cloudinary 업로드)
+   - 인코딩은 gif.js 라이브러리가 Web Worker(백그라운드 스레드)에서 처리하므로
+     GIF를 만드는 동안에도 화면(메인 스레드)이 멈추지 않음.
+   - 워커 스크립트는 fetch로 받아 Blob URL로 변환해서 넘겨준다.
+     (크로스 오리진 CDN 주소를 워커에 직접 넘기면 브라우저에 따라
+      막히는 경우가 있어, 이렇게 하면 항상 안전하게 동작함)
 ========================= */
 let _gifWorkerBlobUrl = null;
 
@@ -599,87 +615,41 @@ function getTimestampForFilename(){
     pad(d.getSeconds());
 }
 
-async function downloadGif(){
-  if(interval) return;
+/* =========================
+   Cloudinary 업로드 (Unsigned Upload)
+========================= */
+const CLOUDINARY_CLOUD_NAME = "qmbonapf";
+const CLOUDINARY_UPLOAD_PRESET = "stickman";
 
-  const hasAny = frames.some(f => f);
-  if(!hasAny){
-    showToast("먼저 그림을 업로드해주세요");
-    return;
-  }
-
-  const btn = document.getElementById("gifBtn");
-  btn.disabled = true;
-  const originalText = btn.innerText;
-  btn.innerText = "⏳";
-  btn.title = "GIF 생성 중...";
-
-  try{
-    const workerUrl = await getGifWorkerUrl();
-
-    const gif = new GIF({
-      workers: 2,
-      quality: 10,
-      width: GIF_OUTPUT_WIDTH,
-      height: GIF_OUTPUT_HEIGHT,
-      workerScript: workerUrl
-    });
-
-    for(let i=0; i<FRAME_COUNT; i++){
-      const tmp = document.createElement("canvas");
-      tmp.width = GIF_OUTPUT_WIDTH;
-      tmp.height = GIF_OUTPUT_HEIGHT;
-      const tctx = tmp.getContext("2d");
-      await drawFrameOnCanvas(frames[i], tctx, tmp.width, tmp.height);
-      gif.addFrame(tmp, { delay: 180 });
-    }
-
-    gif.on("finished", (blob) => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "stickman_special_" + getTimestampForFilename() + ".gif";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      btn.disabled = false;
-      btn.innerText = originalText;
-      btn.title = "GIF 다운로드";
-    });
-
-    gif.render();
-
-  } catch(err){
-    console.error("GIF 생성 중 오류:", err);
-    alert("GIF를 만드는 중 문제가 발생했습니다: " + (err && err.message ? err.message : err));
-    btn.disabled = false;
-    btn.innerText = originalText;
-    btn.title = "GIF 다운로드";
-  }
+// 파일명에 안전하게 쓸 수 있도록 이름 정리 (공백 -> _, 특수문자 제거)
+function sanitizeForFilename(str){
+  return String(str || "").trim().replace(/\s+/g, "_").replace(/[^\w가-힣_-]/g, "");
 }
 
-/* =========================
-   초기화
-========================= */
-(function init(){
-  buildSlotsUI();
-
-  const saved = loadFromLocalStorage();
-  if(saved && saved.frames){
-    frames = saved.frames;
+function uploadGifToCloudinary(blob, publicId, folder){
+  const formData = new FormData();
+  // Blob에 파일명을 명시적으로 지정해야 Cloudinary가 "표시 이름(Display Name)"을
+  // 학생 이름 기반으로 정확히 인식한다. (파일명 없이 보내면 Cloudinary가 임의로
+  // 이름을 붙이거나 표시 이름이 public_id와 다르게 나올 수 있음)
+  formData.append("file", blob, publicId + ".gif");
+  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  formData.append("public_id", publicId);
+  if(folder){
+    // Dynamic Folder Mode 계정은 "folder" 대신 "asset_folder"를 사용해야
+    // 폴더 위치가 정확히 지정되고, 폴더가 중첩되지 않는다.
+    formData.append("asset_folder", folder);
   }
 
-  renderSlots();
-
-  const firstIdx = frames.findIndex(f => f);
-  drawFrameOnCanvas(firstIdx >= 0 ? frames[firstIdx] : null, ctx, canvas.width, canvas.height);
-
-  if(saved){
-    showToast("이전에 업로드한 그림을 불러왔습니다");
-  }
-})();
-</script>
-</body>
-</html>
+  return fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+    method: "POST",
+    body: formData
+  }).then(async res => {
+    if(!res.ok){
+      let detail = "";
+      try{
+        const errJson = await res.json();
+        detail = errJson && errJson.error && errJson.error.message ? errJson.error.message : JSON.stringify(errJson);
+      } catch(e){
+        detail = await res.text().catch(() => "");
+      }
+      throw new Error("업로드 실패 (status " + res.status
