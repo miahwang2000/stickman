@@ -652,4 +652,101 @@ function uploadGifToCloudinary(blob, publicId, folder){
       } catch(e){
         detail = await res.text().catch(() => "");
       }
-      throw new Error("업로드 실패 (status " + res.status
+      throw new Error("업로드 실패 (status " + res.status + "): " + detail);
+    }
+    return res.json();
+  });
+}
+
+async function submitGif(){
+  if(interval) return; // 재생 중에는 실행 안 함
+
+  const hasAny = frames.some(f => f);
+  if(!hasAny){
+    showToast("먼저 그림을 업로드해주세요");
+    return;
+  }
+
+  const btn = document.getElementById("gifBtn");
+  const originalText = btn.innerText;
+  btn.disabled = true;
+  btn.innerText = "제출 중...";
+
+  try{
+    const studentName = localStorage.getItem("studentName") || "이름없음";
+    const classFolder = localStorage.getItem("studentClassFolder") || "2026/unclassified";
+
+    const workerUrl = await getGifWorkerUrl();
+
+    const gif = new GIF({
+      workers: 2,
+      quality: 10,
+      width: GIF_OUTPUT_WIDTH,
+      height: GIF_OUTPUT_HEIGHT,
+      workerScript: workerUrl
+    });
+
+    for(let i=0; i<FRAME_COUNT; i++){
+      const tmp = document.createElement("canvas");
+      tmp.width = GIF_OUTPUT_WIDTH;
+      tmp.height = GIF_OUTPUT_HEIGHT;
+      const tctx = tmp.getContext("2d");
+      await drawFrameOnCanvas(frames[i], tctx, tmp.width, tmp.height);
+      gif.addFrame(tmp, { delay: 180 });
+    }
+
+    gif.on("finished", async (blob) => {
+      try{
+        const publicId = sanitizeForFilename(studentName) + "_" + getTimestampForFilename();
+        await uploadGifToCloudinary(blob, publicId, classFolder);
+
+        btn.innerText = "제출이 완료되었습니다.";
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerText = originalText;
+        }, 1800);
+      } catch(uploadErr){
+        console.error("Cloudinary 업로드 오류:", uploadErr);
+        btn.innerText = "제출에 실패했습니다. 다시 제출해주세요.";
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerText = originalText;
+        }, 2200);
+      }
+    });
+
+    gif.render();
+
+  } catch(err){
+    console.error("GIF 생성 중 오류:", err);
+    btn.innerText = "제출에 실패했습니다. 다시 제출해주세요.";
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerText = originalText;
+    }, 2200);
+  }
+}
+
+/* =========================
+   초기화
+========================= */
+(function init(){
+  buildSlotsUI();
+
+  const saved = loadFromLocalStorage();
+  if(saved && saved.frames){
+    frames = saved.frames;
+  }
+
+  renderSlots();
+
+  const firstIdx = frames.findIndex(f => f);
+  drawFrameOnCanvas(firstIdx >= 0 ? frames[firstIdx] : null, ctx, canvas.width, canvas.height);
+
+  if(saved){
+    showToast("이전에 업로드한 그림을 불러왔습니다");
+  }
+})();
+</script>
+</body>
+</html>
