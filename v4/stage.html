@@ -363,7 +363,7 @@ let brushColor = "#000000"; // 현재 선택된 브러시 색상 (기본값: 검
 ========================= */
 const BRUSH_COLORS = [
   { hex:"#000000", name:"검정" },
-  { hex:"#ffffff", name:"흰색" },
+  { hex:"#ffcc99", name:"살구색" },
   { hex:"#e74c3c", name:"빨강" },
   { hex:"#f39c12", name:"주황" },
   { hex:"#f1c40f", name:"노랑" },
@@ -422,8 +422,6 @@ function chooseColor(hex){
 function updateBrushIcon(){
   const btn = document.getElementById("brushBtn");
   btn.style.color = brushColor;
-  // 흰색처럼 배경(흰 배경 버튼)과 구분이 안 되는 색은 테두리를 살짝 넣어 보이게 함
-  btn.style.textShadow = (brushColor.toLowerCase() === "#ffffff") ? "0 0 0 1px #999, 0 0 1px #999" : "none";
 }
 
 // 팝오버 바깥을 클릭하면 자동으로 닫히도록 처리
