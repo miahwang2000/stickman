@@ -376,8 +376,34 @@ function showToast(msg){
 }
 
 /* =========================
+   업로드한 사진을 정사각형으로 강제 변환 (자르지 않고 늘려서 맞춤)
+   - 사진이 정사각형이 아니면(가로/세로 비율이 다르면), 잘라내지 않고
+     가로/세로 비율을 무시한 채 정사각형 캔버스에 꽉 차도록 늘려서(stretch) 그린다.
+     원본 이미지의 모든 내용이 보이지만, 비율이 원래와 다르게 늘어나 보일 수 있음.
+   - 이렇게 변환된 정사각형 이미지를 frames[i]에 저장해두면, 미리보기/썸네일/
+     GIF 어디서든 항상 정사각형으로 일관되게 보인다.
+========================= */
+function cropToSquareDataUrl(dataUrl, size){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const sq = document.createElement("canvas");
+      sq.width = size;
+      sq.height = size;
+      const sqCtx = sq.getContext("2d");
+      // 원본 이미지 전체(0,0,img.width,img.height)를 정사각형 캔버스 전체 크기로 늘려서 그림
+      sqCtx.drawImage(img, 0, 0, img.width, img.height, 0, 0, size, size);
+      resolve(sq.toDataURL("image/jpeg", 0.92));
+    };
+    img.onerror = () => reject(new Error("이미지를 불러오지 못했습니다"));
+    img.src = dataUrl;
+  });
+}
+
+/* =========================
    미리보기 캔버스에 이미지를 "contain" 방식으로 그리기
-   (업로드한 사진은 정사각형이 아닐 수 있으므로 흰 배경 위에 비율을 유지한 채 그림)
+   (frames[i]는 이미 정사각형으로 크롭되어 저장되므로, 실제로는 캔버스를 꽉 채워 그려짐.
+    이 함수는 그 외의 경우(구버전 데이터 등)에도 안전하게 동작하도록 비율 유지 로직을 남겨둠)
 ========================= */
 function drawFrameOnCanvas(dataUrl, targetCtx, w, h){
   return new Promise((resolve)=>{
@@ -520,12 +546,19 @@ function handleFileSelect(i, file){
   if(!file) return;
 
   const reader = new FileReader();
-  reader.onload = (e) => {
-    frames[i] = e.target.result;
-    renderSlots();
-    drawFrameOnCanvas(frames[i], ctx, canvas.width, canvas.height);
-    saveToLocalStorage();
-    showToast((i + 1) + "번 프레임 업로드 완료");
+  reader.onload = async (e) => {
+    try{
+      // 업로드한 사진이 정사각형이 아니면 잘라내지 않고 늘려서 정사각형으로 강제 변환
+      const squareDataUrl = await cropToSquareDataUrl(e.target.result, canvas.width);
+      frames[i] = squareDataUrl;
+      renderSlots();
+      await drawFrameOnCanvas(frames[i], ctx, canvas.width, canvas.height);
+      saveToLocalStorage();
+      showToast((i + 1) + "번 프레임 업로드 완료");
+    } catch(err){
+      console.error("이미지 처리 중 오류:", err);
+      showToast("이미지를 불러오지 못했습니다");
+    }
   };
   reader.onerror = () => {
     showToast("이미지를 불러오지 못했습니다");
